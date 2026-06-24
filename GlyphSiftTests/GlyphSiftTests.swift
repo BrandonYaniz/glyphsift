@@ -288,6 +288,32 @@ final class GlyphSiftTests: XCTestCase {
         XCTAssertEqual(link.absoluteString, "https://openai.com")
     }
 
+    func testSettingsStoreExportsAndImportsSettings() throws {
+        var settings = AppSettings.default
+        settings.selectedPreset = .aggressiveClean
+        settings.selectedOutputFormat = .html
+        settings.regexRules = [
+            RegexRule(name: "Trim SKU prefix", findPattern: #"SKU-(\d+)"#, replacement: "$1", order: 0)
+        ]
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("GlyphSiftSettings-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        try SettingsStore().export(settings, to: url)
+        let imported = try SettingsStore().import(from: url)
+
+        XCTAssertEqual(imported.selectedPreset, .aggressiveClean)
+        XCTAssertEqual(imported.selectedOutputFormat, .html)
+        XCTAssertEqual(imported.regexRules, settings.regexRules)
+    }
+
+    func testSettingsStoreRejectsMalformedImport() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("GlyphSiftBadSettings-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: url) }
+        try Data(#"{"selectedPreset":"plainText"}"#.utf8).write(to: url)
+
+        XCTAssertThrowsError(try SettingsStore().import(from: url))
+    }
+
     func testClipboardWriterCopiesHTMLWithPlainTextFallback() {
         let pasteboard = NSPasteboard(name: NSPasteboard.Name("GlyphSiftHTML.\(UUID().uuidString)"))
         let output = RenderedOutput(displayText: "<p>Hello</p>", plainText: "<p>Hello</p>", attributedString: nil, rtfData: nil)
