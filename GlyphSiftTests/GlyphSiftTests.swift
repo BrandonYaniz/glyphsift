@@ -172,6 +172,7 @@ final class GlyphSiftTests: XCTestCase {
         let output = try OutputRenderer().render(result, format: .plainText, sourceFormat: .html, rawText: result.cleaned)
 
         XCTAssertEqual(output.plainText, "Heading\nA line")
+        XCTAssertEqual(output.warnings, ["Formatting is removed for Plain Text output."])
     }
 
     func testAttributedCleanerPreservesFormattingWhenTextIsCleaned() throws {
@@ -220,5 +221,12 @@ final class GlyphSiftTests: XCTestCase {
         XCTAssertEqual(message, "Copied")
         XCTAssertNotNil(pasteboard.data(forType: .rtf))
         XCTAssertEqual(pasteboard.string(forType: .string), "Hello")
+    }
+
+    func testRendererWarnsForBestEffortConversion() throws {
+        let result = engine.analyze("## Heading", preset: .plainText, settings: .default)
+        let output = try OutputRenderer().render(result, format: .html, sourceFormat: .markdown, rawText: result.cleaned)
+
+        XCTAssertEqual(output.warnings, ["Conversion is best effort. Raw keeps the most complete source when available."])
     }
 }

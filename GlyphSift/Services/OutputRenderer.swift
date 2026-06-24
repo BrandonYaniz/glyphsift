@@ -12,25 +12,40 @@ struct OutputRenderer: OutputRendering {
             return RenderedOutput(displayText: rawText, plainText: rawText, attributedString: nil, rtfData: nil)
         case .plainText:
             let plainText = renderPlainText(result.cleaned, sourceFormat: sourceFormat, rawText: rawText)
-            return RenderedOutput(displayText: plainText, plainText: plainText, attributedString: nil, rtfData: nil)
+            return RenderedOutput(displayText: plainText, plainText: plainText, attributedString: nil, rtfData: nil, warnings: warnings(for: format, sourceFormat: sourceFormat))
         case .markdown:
             let markdown = renderMarkdown(result.cleaned, sourceFormat: sourceFormat, rawText: rawText)
-            return RenderedOutput(displayText: markdown, plainText: markdown, attributedString: nil, rtfData: nil)
+            return RenderedOutput(displayText: markdown, plainText: markdown, attributedString: nil, rtfData: nil, warnings: warnings(for: format, sourceFormat: sourceFormat))
         case .html:
             let html = renderHTML(result.cleaned, sourceFormat: sourceFormat, rawText: rawText)
-            return RenderedOutput(displayText: html, plainText: html, attributedString: nil, rtfData: nil)
+            return RenderedOutput(displayText: html, plainText: html, attributedString: nil, rtfData: nil, warnings: warnings(for: format, sourceFormat: sourceFormat))
         case .richText:
             let attributed = renderRichText(result.cleaned, sourceFormat: sourceFormat, rawText: rawText, richText: richText)
             let rtf = try? attributed.data(
                 from: NSRange(location: 0, length: attributed.length),
                 documentAttributes: [.documentType: NSAttributedString.DocumentType.rtf]
             )
-            return RenderedOutput(displayText: attributed.string, plainText: attributed.string, attributedString: attributed, rtfData: rtf)
+            return RenderedOutput(displayText: attributed.string, plainText: attributed.string, attributedString: attributed, rtfData: rtf, warnings: warnings(for: format, sourceFormat: sourceFormat))
         }
     }
 }
 
 private extension OutputRenderer {
+    func warnings(for format: OutputFormat, sourceFormat: SourceFormat) -> [String] {
+        guard sourceFormat != .plainText, format != .raw else {
+            return []
+        }
+
+        switch (sourceFormat, format) {
+        case (.html, .plainText), (.markdown, .plainText), (.richText, .plainText):
+            return ["Formatting is removed for Plain Text output."]
+        case (.html, .markdown), (.markdown, .html), (.html, .richText), (.markdown, .richText), (.richText, .html), (.richText, .markdown):
+            return ["Conversion is best effort. Raw keeps the most complete source when available."]
+        default:
+            return []
+        }
+    }
+
     func renderPlainText(_ cleaned: String, sourceFormat: SourceFormat, rawText: String) -> String {
         switch sourceFormat {
         case .html:

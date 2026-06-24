@@ -127,6 +127,11 @@ struct ContentView: View {
                     placeholder: "Cleaned text will appear here."
                 )
             }
+            ForEach(viewModel.renderedOutput.warnings, id: \.self) { warning in
+                Text(warning)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
     }
 
