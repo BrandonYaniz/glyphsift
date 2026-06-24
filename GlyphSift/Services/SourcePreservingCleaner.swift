@@ -6,27 +6,31 @@ struct SourcePreservingCleaner {
             return input
         }
 
-        let protectedRanges = protectedRanges(in: input, sourceFormat: sourceFormat)
-        return rewrite(input, protectedRanges: protectedRanges) { segment in
-            cleanSegment(segment, preset: preset, settings: settings)
-        }
+        return rewrite(input, segments: segments(in: input, sourceFormat: sourceFormat), preset: preset, settings: settings)
     }
 }
 
 private extension SourcePreservingCleaner {
-    func protectedRanges(in input: String, sourceFormat: SourceFormat) -> [NSRange] {
+    enum SegmentPolicy {
+        case protected
+        case conservative
+    }
+
+    struct SourceSegment {
+        var range: NSRange
+        var policy: SegmentPolicy
+    }
+
+    func segments(in input: String, sourceFormat: SourceFormat) -> [SourceSegment] {
         switch sourceFormat {
         case .html:
-            return ranges(
-                in: input,
-                patterns: [
-                    #"(?is)<script\b[^>]*>.*?</script\s*>"#,
-                    #"(?is)<style\b[^>]*>.*?</style\s*>"#,
-                    #"(?s)<[^>]+>"#
-                ]
-            )
+            let tagSegments = ranges(in: input, patterns: [#"(?s)<[^>]+>"#])
+                .map { SourceSegment(range: $0, policy: .protected) }
+            let sourceSegments = htmlSourceContentRanges(in: input)
+                .map { SourceSegment(range: $0, policy: .conservative) }
+            return mergedSegments(tagSegments + sourceSegments)
         case .markdown:
-            return ranges(
+            let protected = ranges(
                 in: input,
                 patterns: [
                     #"(?ms)^```.*?^```"#,
@@ -40,16 +44,29 @@ private extension SourcePreservingCleaner {
                     #"\*\*|__|\*|_"#
                 ]
             )
+            return protected.map { SourceSegment(range: $0, policy: .protected) }
         default:
             return []
         }
     }
 
+    func htmlSourceContentRanges(in input: String) -> [NSRange] {
+        ranges(in: input, patterns: [#"(?is)<script\b[^>]*>(.*?)</script\s*>"#, #"(?is)<style\b[^>]*>(.*?)</style\s*>"#], captureIndex: 1)
+    }
+
     func ranges(in input: String, patterns: [String]) -> [NSRange] {
+        ranges(in: input, patterns: patterns, captureIndex: 0)
+    }
+
+    func ranges(in input: String, patterns: [String], captureIndex: Int) -> [NSRange] {
         let fullRange = NSRange(location: 0, length: (input as NSString).length)
         let collected = patterns.flatMap { pattern -> [NSRange] in
             guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
-            return regex.matches(in: input, range: fullRange).map(\.range)
+            return regex.matches(in: input, range: fullRange).compactMap { match in
+                guard match.numberOfRanges > captureIndex else { return nil }
+                let range = match.range(at: captureIndex)
+                return range.location == NSNotFound ? nil : range
+            }
         }
         return merged(collected)
     }
@@ -78,22 +95,51 @@ private extension SourcePreservingCleaner {
         return result
     }
 
-    func rewrite(_ input: String, protectedRanges: [NSRange], transform: (String) -> String) -> String {
+    func mergedSegments(_ segments: [SourceSegment]) -> [SourceSegment] {
+        segments
+            .filter { $0.range.location != NSNotFound && $0.range.length > 0 }
+            .sorted {
+                if $0.range.location == $1.range.location {
+                    return $0.range.length > $1.range.length
+                }
+                return $0.range.location < $1.range.location
+            }
+            .reduce(into: [SourceSegment]()) { result, segment in
+                guard let last = result.last else {
+                    result.append(segment)
+                    return
+                }
+
+                if segment.range.location < NSMaxRange(last.range) {
+                    return
+                }
+                result.append(segment)
+            }
+    }
+
+    func rewrite(_ input: String, segments: [SourceSegment], preset: CleaningPreset, settings: AppSettings) -> String {
         let nsInput = input as NSString
         var output = ""
         var location = 0
 
-        for protectedRange in protectedRanges {
-            if protectedRange.location > location {
-                let segmentRange = NSRange(location: location, length: protectedRange.location - location)
-                output += transform(nsInput.substring(with: segmentRange))
+        for segment in segments {
+            if segment.range.location > location {
+                let segmentRange = NSRange(location: location, length: segment.range.location - location)
+                output += cleanSegment(nsInput.substring(with: segmentRange), preset: preset, settings: settings)
             }
-            output += nsInput.substring(with: protectedRange)
-            location = NSMaxRange(protectedRange)
+
+            let segmentText = nsInput.substring(with: segment.range)
+            switch segment.policy {
+            case .protected:
+                output += segmentText
+            case .conservative:
+                output += cleanConservativeSource(segmentText, preset: preset, settings: settings)
+            }
+            location = NSMaxRange(segment.range)
         }
 
         if location < nsInput.length {
-            output += transform(nsInput.substring(from: location))
+            output += cleanSegment(nsInput.substring(from: location), preset: preset, settings: settings)
         }
 
         return output
@@ -104,6 +150,18 @@ private extension SourcePreservingCleaner {
         output = removeHiddenUnicode(output, preset: preset, settings: settings)
         output = normalizeWhitespace(output, preset: preset, settings: settings)
         output = normalizePunctuation(output, preset: preset, settings: settings)
+        return output
+    }
+
+    func cleanConservativeSource(_ input: String, preset: CleaningPreset, settings: AppSettings) -> String {
+        var output = removeHiddenUnicode(input, preset: preset, settings: settings)
+        if settings.whitespace.normalizeLineBreaks {
+            output = output.replacingOccurrences(of: "\r\n", with: "\n").replacingOccurrences(of: "\r", with: "\n")
+        }
+        if settings.whitespace.normalizeNoBreakSpaces {
+            let scalars = output.unicodeScalars.map { Self.spaceScalars.contains($0.value) ? UnicodeScalar(32)! : $0 }
+            output = String(String.UnicodeScalarView(scalars))
+        }
         return output
     }
 
