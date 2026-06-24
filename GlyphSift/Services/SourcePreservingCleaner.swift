@@ -30,24 +30,63 @@ private extension SourcePreservingCleaner {
                 .map { SourceSegment(range: $0, policy: .conservative) }
             return mergedSegments(tagSegments + sourceSegments)
         case .markdown:
-            let protected = ranges(
-                in: input,
-                patterns: [
-                    #"(?ms)^```.*?^```"#,
-                    #"`[^`\n]+`"#,
-                    #"!\[[^\]]*\]\([^\)]*\)"#,
-                    #"\[[^\]]+\]\([^\)]+\)"#,
-                    #"(?m)^\s{0,3}#{1,6}\s+"#,
-                    #"(?m)^\s{0,3}>\s?"#,
-                    #"(?m)^\s*[-*+]\s+"#,
-                    #"(?m)^\s*\d+\.\s+"#,
-                    #"\*\*|__|\*|_"#
-                ]
-            )
-            return protected.map { SourceSegment(range: $0, policy: .protected) }
+            return markdownSegments(in: input)
         default:
             return []
         }
+    }
+
+    func markdownSegments(in input: String) -> [SourceSegment] {
+        let conservativePatterns = [
+            #"(?ms)\A---\s*$.*?^---\s*$"#,
+            #"(?ms)^```.*?^```"#,
+            #"(?ms)^~~~.*?^~~~"#,
+            #"(?m)^(?: {4}|\t).*$"#,
+            #"(?m)^\s{0,3}\[[^\]]+\]:\s+\S.*$"#
+        ]
+        let protectedPatterns = [
+            #"`[^`\n]+`"#,
+            #"!\[[^\]]*\]\([^\)]*\)"#,
+            #"\[[^\]]+\]\([^\)]+\)"#,
+            #"<[A-Za-z][^>\n]*>"#,
+            #"(?m)^\s{0,3}#{1,6}\s+"#,
+            #"(?m)^\s{0,3}>\s?"#,
+            #"(?m)^\s*[-*+]\s+"#,
+            #"(?m)^\s*\d+\.\s+"#,
+            #"\*\*|__|\*|_"#
+        ]
+
+        let conservative = ranges(in: input, patterns: conservativePatterns)
+            .map { SourceSegment(range: $0, policy: .conservative) }
+        let escaped = escapedMarkdownRanges(in: input)
+            .map { SourceSegment(range: $0, policy: .protected) }
+        let protected = ranges(in: input, patterns: protectedPatterns)
+            .map { SourceSegment(range: $0, policy: .protected) }
+        return mergedSegments(conservative + escaped + protected)
+    }
+
+    func escapedMarkdownRanges(in input: String) -> [NSRange] {
+        var ranges: [NSRange] = []
+        var index = input.startIndex
+
+        while index < input.endIndex {
+            guard input[index] == "\\" else {
+                index = input.index(after: index)
+                continue
+            }
+
+            let next = input.index(after: index)
+            guard next < input.endIndex, input[next] != "\n" else {
+                index = next
+                continue
+            }
+
+            let end = input.index(after: next)
+            ranges.append(NSRange(index..<end, in: input))
+            index = end
+        }
+
+        return ranges
     }
 
     func htmlSourceContentRanges(in input: String) -> [NSRange] {
@@ -125,7 +164,7 @@ private extension SourcePreservingCleaner {
         for segment in segments {
             if segment.range.location > location {
                 let segmentRange = NSRange(location: location, length: segment.range.location - location)
-                output += cleanSegment(nsInput.substring(with: segmentRange), preset: preset, settings: settings)
+                output += cleanSegment(nsInput.substring(with: segmentRange), preset: preset, settings: settings, trimFinalBoundary: false)
             }
 
             let segmentText = nsInput.substring(with: segment.range)
@@ -145,10 +184,10 @@ private extension SourcePreservingCleaner {
         return output
     }
 
-    func cleanSegment(_ input: String, preset: CleaningPreset, settings: AppSettings) -> String {
+    func cleanSegment(_ input: String, preset: CleaningPreset, settings: AppSettings, trimFinalBoundary: Bool = true) -> String {
         var output = input
         output = removeHiddenUnicode(output, preset: preset, settings: settings)
-        output = normalizeWhitespace(output, preset: preset, settings: settings)
+        output = normalizeWhitespace(output, preset: preset, settings: settings, trimFinalBoundary: trimFinalBoundary)
         output = normalizePunctuation(output, preset: preset, settings: settings)
         return output
     }
@@ -172,7 +211,7 @@ private extension SourcePreservingCleaner {
         return String(input.unicodeScalars.filter { !shouldRemoveHiddenScalar($0, settings: settings) })
     }
 
-    func normalizeWhitespace(_ input: String, preset: CleaningPreset, settings: AppSettings) -> String {
+    func normalizeWhitespace(_ input: String, preset: CleaningPreset, settings: AppSettings, trimFinalBoundary: Bool = true) -> String {
         var output = input
         if settings.whitespace.normalizeLineBreaks {
             output = output.replacingOccurrences(of: "\r\n", with: "\n").replacingOccurrences(of: "\r", with: "\n")
@@ -185,7 +224,10 @@ private extension SourcePreservingCleaner {
             output = output.replacingOccurrences(of: "\t", with: String(repeating: " ", count: max(settings.whitespace.tabWidth, 1)))
         }
         if preset != .privacyClean, settings.whitespace.trimTrailingWhitespace {
-            output = replacing(output, pattern: "[ \\t]+$", options: [.anchorsMatchLines], template: "")
+            output = replacing(output, pattern: "[ \\t]+(?=\\n)", template: "")
+            if trimFinalBoundary {
+                output = replacing(output, pattern: "[ \\t]+\\z", template: "")
+            }
         }
         if settings.whitespace.collapseMultipleSpaces || preset == .publishingClean || preset == .aggressiveClean {
             output = replacing(output, pattern: " {2,}", template: " ")

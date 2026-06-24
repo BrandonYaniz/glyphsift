@@ -144,6 +144,37 @@ final class GlyphSiftTests: XCTestCase {
         XCTAssertEqual(raw, "## \"Title\"\n\nThis hasspaces.")
     }
 
+    func testRawMarkdownCleansFencedCodeConservatively() throws {
+        let cleaner = SourcePreservingCleaner()
+        let input = "```js\nconst value = “keep”;\u{200B}\n```\n\n“Clean”"
+        let raw = cleaner.clean(input, sourceFormat: .markdown, preset: .aggressiveClean, settings: .default)
+
+        XCTAssertEqual(raw, "```js\nconst value = “keep”;\n```\n\n\"Clean\"")
+    }
+
+    func testRawMarkdownCleansFrontMatterConservatively() throws {
+        let cleaner = SourcePreservingCleaner()
+        let input = "---\ntitle: “Keep”\u{200B}\n---\n\n“Clean”"
+        let raw = cleaner.clean(input, sourceFormat: .markdown, preset: .aggressiveClean, settings: .default)
+
+        XCTAssertEqual(raw, "---\ntitle: “Keep”\n---\n\n\"Clean\"")
+    }
+
+    func testRawMarkdownCleansReferenceLinksConservatively() throws {
+        let cleaner = SourcePreservingCleaner()
+        let input = "[ref]: https://example.com/“keep”\u{200B}\n\n“Clean”"
+        let raw = cleaner.clean(input, sourceFormat: .markdown, preset: .aggressiveClean, settings: .default)
+
+        XCTAssertEqual(raw, "[ref]: https://example.com/“keep”\n\n\"Clean\"")
+    }
+
+    func testRawMarkdownPreservesEscapedMarkup() throws {
+        let cleaner = SourcePreservingCleaner()
+        let raw = cleaner.clean(#"Use \*literal\* markup and “clean” text."#, sourceFormat: .markdown, preset: .aggressiveClean, settings: .default)
+
+        XCTAssertEqual(raw, #"Use \*literal\* markup and "clean" text."#)
+    }
+
     func testRawHTMLPreservesTagsAndScriptWhileCleaningVisibleText() throws {
         let cleaner = SourcePreservingCleaner()
         let input = "<p>“Hello”\u{00A0}there\u{200B}</p><script>const x = “keep”;\u{200B}  </script>"
