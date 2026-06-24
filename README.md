@@ -10,7 +10,8 @@ The app is intended for text copied from websites, email, documents, content man
 - Highlights every replacement candidate for the selected preset.
 - Shows cleaned output in a separate read-only pane.
 - Reports the number and type of changes found.
-- Copies cleaned output as plain text or rich text.
+- Detects plain text, Markdown, HTML, and Rich Text input where possible.
+- Copies cleaned output as plain text, Markdown, HTML, or Rich Text when that makes sense for the detected input.
 - Preserves settings and custom regex rules between launches.
 - Imports and exports settings as JSON.
 - Makes selected invisible Unicode characters visible through marker labels.
@@ -37,17 +38,31 @@ Removes dangerous hidden characters while preserving tabs, indentation, repeated
 
 Combines privacy and publishing cleanup with optional Markdown, HTML, destructive Unicode, and custom regex processing.
 
-## Output Formats
+## Output And Conversion
 
-**Plain Text** copies the cleaned string directly to the pasteboard.
+GlyphSift auto-detects the input format instead of asking for an input mode. The output picker changes based on what was detected.
 
-**Rich Text** converts common Markdown formatting into an attributed string and places both RTF data and a plain-text fallback on the pasteboard. The current renderer supports:
+**Plain Text** is always available. For plain text input, it is the only output option because there is no formatting to preserve.
+
+**Raw** is available for Markdown and HTML input. It keeps the original Markdown or HTML structure, cleans the source text, and preserves tags, Markdown markers, and embedded source as much as possible.
+
+**Markdown** is available for Markdown, HTML, and Rich Text input. Markdown-to-Markdown keeps the cleaned source. HTML and Rich Text conversion are best effort.
+
+**HTML** is available for Markdown, HTML, and Rich Text input. HTML-to-HTML keeps the cleaned source. Markdown and Rich Text conversion are best effort.
+
+**Rich Text** is available for Markdown, HTML, and Rich Text input. Rich Text pasted from another app keeps formatting where the cleanup can safely preserve the attributed ranges. Rich Text output is copied as RTF with a plain-text fallback.
+
+The current Markdown and Rich Text renderer supports common formatting:
 
 - First-, second-, and third-level headings
 - Ordered and unordered lists
 - Bold and italic text
 - Inline code
 - Markdown links
+
+Conversion warnings appear below the output pane when formatting is removed or when a conversion is best effort. Raw output is the safest choice when the original markup needs to remain complete.
+
+Embedded JavaScript and CSS are never executed. In Raw HTML output, GlyphSift treats `<script>` and `<style>` content as source text: it applies conservative cleanup, keeps the source in place, and does not try to convert it into Markdown or Rich Text.
 
 ## Custom Regex Rules
 
@@ -79,11 +94,11 @@ Settings are stored at:
 
 ## Requirements
 
-- macOS 26.2 or later
+- macOS 15.6 or later
 - Xcode 26.2 or later
 - Swift 5 language mode
 
-The deployment target reflects the current project configuration and can be lowered after compatibility testing.
+The project currently builds with the macOS 26.2 SDK and targets macOS 15.6.
 
 ## Building
 
@@ -102,7 +117,7 @@ xcodebuild build \
 
 ## Tests
 
-The unit tests cover hidden Unicode removal, line-ending and whitespace normalization, punctuation cleanup, Code Safe formatting, regex replacement, and invalid regex handling.
+The unit tests cover hidden Unicode removal, line-ending and whitespace normalization, punctuation cleanup, Code Safe formatting, regex replacement, invalid regex handling, format detection, raw source preservation, conversion warnings, and clipboard output types.
 
 Run them with:
 
@@ -120,8 +135,8 @@ xcodebuild test \
 
 ```text
 GlyphSift/
-  Models/       Settings, presets, findings, results, and output types
-  Services/     Cleaning, rendering, and settings persistence
+  Models/       Settings, presets, findings, source formats, results, and output types
+  Services/     Cleaning, source preservation, rendering, clipboard writing, and settings persistence
   ViewModels/   Main application state and actions
   Views/        SwiftUI views and AppKit text view bridges
 GlyphSiftTests/ Engine unit tests
