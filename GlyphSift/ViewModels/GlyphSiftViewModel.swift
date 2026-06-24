@@ -10,6 +10,8 @@ final class GlyphSiftViewModel: ObservableObject {
 
     @Published var cleanedText: String = ""
     @Published var renderedOutput: RenderedOutput = .empty
+    @Published var sourceFormat: SourceFormat = .plainText
+    @Published var availableOutputFormats: [OutputFormat] = OutputFormat.available(for: .plainText)
 
     @Published var selectedPreset: CleaningPreset {
         didSet {
@@ -43,6 +45,8 @@ final class GlyphSiftViewModel: ObservableObject {
 
     private let engine = CleaningEngine()
     private let renderer = OutputRenderer()
+    private let formatDetector = SourceFormatDetector()
+    private let sourcePreservingCleaner = SourcePreservingCleaner()
     private let store = SettingsStore()
     private var isUpdatingSettings = false
 
@@ -55,9 +59,17 @@ final class GlyphSiftViewModel: ObservableObject {
     }
 
     func recompute() {
+        sourceFormat = formatDetector.detect(originalText)
+        availableOutputFormats = OutputFormat.available(for: sourceFormat)
+        if !availableOutputFormats.contains(selectedOutputFormat) {
+            selectedOutputFormat = availableOutputFormats.first ?? .plainText
+            return
+        }
+
         selectedResult = engine.analyze(originalText, preset: selectedPreset, settings: settings)
         cleanedText = selectedResult.cleaned
-        renderedOutput = (try? renderer.render(selectedResult, format: selectedOutputFormat)) ?? RenderedOutput(displayText: cleanedText, plainText: cleanedText, attributedString: nil, rtfData: nil)
+        let rawText = sourcePreservingCleaner.clean(originalText, sourceFormat: sourceFormat, preset: selectedPreset, settings: settings)
+        renderedOutput = (try? renderer.render(selectedResult, format: selectedOutputFormat, sourceFormat: sourceFormat, rawText: rawText)) ?? RenderedOutput(displayText: cleanedText, plainText: cleanedText, attributedString: nil, rtfData: nil)
 
         var counts: [CleaningPreset: Int] = [:]
         for preset in CleaningPreset.allCases {
@@ -77,6 +89,9 @@ final class GlyphSiftViewModel: ObservableObject {
         pasteboard.clearContents()
 
         switch selectedOutputFormat {
+        case .raw, .markdown, .html:
+            pasteboard.setString(renderedOutput.plainText, forType: .string)
+            statusMessage = "Copied"
         case .plainText:
             pasteboard.setString(renderedOutput.plainText, forType: .string)
             statusMessage = "Copied"

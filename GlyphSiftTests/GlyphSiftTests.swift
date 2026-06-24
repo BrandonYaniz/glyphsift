@@ -3,6 +3,7 @@ import XCTest
 
 final class GlyphSiftTests: XCTestCase {
     private let engine = CleaningEngine()
+    private let detector = SourceFormatDetector()
 
     func testPrivacyCleanRemovesHiddenUnicode() {
         let result = engine.analyze("Hello\u{200B}World\u{FEFF}", preset: .privacyClean, settings: .default)
@@ -101,5 +102,50 @@ final class GlyphSiftTests: XCTestCase {
         let result = engine.analyze("Hello\u{200B} “World”", preset: .aggressiveClean, settings: .default)
 
         XCTAssertGreaterThan(result.findings.count, 0)
+    }
+
+    func testSourceFormatDetectsHTML() {
+        XCTAssertEqual(detector.detect("<p>Hello</p>"), .html)
+    }
+
+    func testSourceFormatDetectsMarkdown() {
+        XCTAssertEqual(detector.detect("## Heading\n\n[Link](https://example.com)"), .markdown)
+    }
+
+    func testPlainTextOnlyOffersPlainTextOutput() {
+        XCTAssertEqual(OutputFormat.available(for: .plainText), [.plainText])
+    }
+
+    func testMarkdownOffersFormattedOutputs() {
+        XCTAssertEqual(OutputFormat.available(for: .markdown), [.raw, .plainText, .markdown, .html, .richText])
+    }
+
+    func testRawMarkdownPreservesMarkupWhileCleaningText() throws {
+        let cleaner = SourcePreservingCleaner()
+        let raw = cleaner.clean("## “Title”\n\nThis\u{00A0}has\u{200B}spaces.", sourceFormat: .markdown, preset: .aggressiveClean, settings: .default)
+
+        XCTAssertEqual(raw, "## \"Title\"\n\nThis hasspaces.")
+    }
+
+    func testRawHTMLPreservesTagsAndScriptWhileCleaningVisibleText() throws {
+        let cleaner = SourcePreservingCleaner()
+        let input = "<p>“Hello”\u{00A0}there\u{200B}</p><script>const x = “keep”;  </script>"
+        let raw = cleaner.clean(input, sourceFormat: .html, preset: .aggressiveClean, settings: .default)
+
+        XCTAssertEqual(raw, "<p>\"Hello\" there</p><script>const x = “keep”;  </script>")
+    }
+
+    func testRendererConvertsMarkdownToPlainText() throws {
+        let result = engine.analyze("## Heading\n\nA [link](https://example.com)", preset: .plainText, settings: .default)
+        let output = try OutputRenderer().render(result, format: .plainText, sourceFormat: .markdown, rawText: result.cleaned)
+
+        XCTAssertEqual(output.plainText, "Heading\n\nA link")
+    }
+
+    func testRendererConvertsHTMLToPlainText() throws {
+        let result = engine.analyze("<h1>Heading</h1><p>A&nbsp;line</p>", preset: .plainText, settings: .default)
+        let output = try OutputRenderer().render(result, format: .plainText, sourceFormat: .html, rawText: result.cleaned)
+
+        XCTAssertEqual(output.plainText, "Heading\nA line")
     }
 }

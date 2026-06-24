@@ -29,13 +29,16 @@ struct ContentView: View {
             Text("GlyphSift")
                 .font(.title2.weight(.semibold))
             Spacer()
+            Text(viewModel.sourceFormat.displayName)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
             Picker("Output Type", selection: $viewModel.selectedOutputFormat) {
-                ForEach(OutputFormat.allCases) { format in
+                ForEach(viewModel.availableOutputFormats) { format in
                     Text(format.displayName).tag(format)
                 }
             }
             .pickerStyle(.segmented)
-            .frame(width: 220)
+            .frame(width: 460)
             Button("Copy Cleaned") {
                 viewModel.copyCleanedOutput()
             }
@@ -117,7 +120,7 @@ struct ContentView: View {
                 RichTextPreview(attributedString: viewModel.renderedOutput.attributedString, fallbackText: viewModel.renderedOutput.displayText)
             } else {
                 HighlightedTextView(
-                    text: .constant(viewModel.cleanedText),
+                    text: .constant(viewModel.renderedOutput.displayText),
                     findings: [],
                     isEditable: false,
                     placeholder: "Cleaned text will appear here."

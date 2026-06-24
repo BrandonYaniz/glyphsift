@@ -2,16 +2,25 @@ import AppKit
 import Foundation
 
 protocol OutputRendering {
-    func render(_ result: CleaningResult, format: OutputFormat) throws -> RenderedOutput
+    func render(_ result: CleaningResult, format: OutputFormat, sourceFormat: SourceFormat, rawText: String) throws -> RenderedOutput
 }
 
 struct OutputRenderer: OutputRendering {
-    func render(_ result: CleaningResult, format: OutputFormat) throws -> RenderedOutput {
+    func render(_ result: CleaningResult, format: OutputFormat, sourceFormat: SourceFormat, rawText: String) throws -> RenderedOutput {
         switch format {
+        case .raw:
+            return RenderedOutput(displayText: rawText, plainText: rawText, attributedString: nil, rtfData: nil)
         case .plainText:
-            return RenderedOutput(displayText: result.cleaned, plainText: result.cleaned, attributedString: nil, rtfData: nil)
+            let plainText = renderPlainText(result.cleaned, sourceFormat: sourceFormat, rawText: rawText)
+            return RenderedOutput(displayText: plainText, plainText: plainText, attributedString: nil, rtfData: nil)
+        case .markdown:
+            let markdown = renderMarkdown(result.cleaned, sourceFormat: sourceFormat, rawText: rawText)
+            return RenderedOutput(displayText: markdown, plainText: markdown, attributedString: nil, rtfData: nil)
+        case .html:
+            let html = renderHTML(result.cleaned, sourceFormat: sourceFormat, rawText: rawText)
+            return RenderedOutput(displayText: html, plainText: html, attributedString: nil, rtfData: nil)
         case .richText:
-            let attributed = renderRichText(result.cleaned)
+            let attributed = renderRichText(result.cleaned, sourceFormat: sourceFormat, rawText: rawText)
             let rtf = try? attributed.data(
                 from: NSRange(location: 0, length: attributed.length),
                 documentAttributes: [.documentType: NSAttributedString.DocumentType.rtf]
@@ -22,7 +31,51 @@ struct OutputRenderer: OutputRendering {
 }
 
 private extension OutputRenderer {
-    func renderRichText(_ markdown: String) -> NSAttributedString {
+    func renderPlainText(_ cleaned: String, sourceFormat: SourceFormat, rawText: String) -> String {
+        switch sourceFormat {
+        case .html:
+            return htmlToPlainText(rawText)
+        case .markdown:
+            return markdownToPlainText(rawText)
+        case .plainText, .richText:
+            return cleaned
+        }
+    }
+
+    func renderMarkdown(_ cleaned: String, sourceFormat: SourceFormat, rawText: String) -> String {
+        switch sourceFormat {
+        case .markdown:
+            return rawText
+        case .html:
+            return htmlToMarkdown(rawText)
+        case .plainText, .richText:
+            return cleaned
+        }
+    }
+
+    func renderHTML(_ cleaned: String, sourceFormat: SourceFormat, rawText: String) -> String {
+        switch sourceFormat {
+        case .html:
+            return rawText
+        case .markdown:
+            return markdownToHTML(rawText)
+        case .plainText, .richText:
+            return htmlEscaped(cleaned)
+        }
+    }
+
+    func renderRichText(_ cleaned: String, sourceFormat: SourceFormat, rawText: String) -> NSAttributedString {
+        switch sourceFormat {
+        case .html:
+            return attributedHTML(rawText) ?? NSAttributedString(string: htmlToPlainText(rawText))
+        case .markdown:
+            return renderMarkdownAsRichText(rawText)
+        case .plainText, .richText:
+            return NSAttributedString(string: cleaned)
+        }
+    }
+
+    func renderMarkdownAsRichText(_ markdown: String) -> NSAttributedString {
         let output = NSMutableAttributedString()
         let lines = markdown.components(separatedBy: .newlines)
 
@@ -35,6 +88,118 @@ private extension OutputRenderer {
         }
 
         return output
+    }
+
+    func htmlToPlainText(_ html: String) -> String {
+        let withBreaks = replacing(html, pattern: #"(?i)<\s*br\s*/?\s*>|</\s*(p|div|section|article|li|h[1-6]|tr)\s*>"#, template: "\n")
+        let withoutScripts = replacing(withBreaks, pattern: #"(?is)<script\b[^>]*>.*?</script\s*>"#, template: "")
+        let withoutStyles = replacing(withoutScripts, pattern: #"(?is)<style\b[^>]*>.*?</style\s*>"#, template: "")
+        let withoutTags = replacing(withoutStyles, pattern: #"(?s)<[^>]+>"#, template: "")
+        return decodeHTMLEntities(withoutTags)
+            .components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .joined(separator: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    func markdownToPlainText(_ markdown: String) -> String {
+        var output = markdown
+        output = replacing(output, pattern: #"(?ms)^```.*?^```"#, template: "")
+        output = replacing(output, pattern: #"!\[([^\]]*)\]\([^\)]*\)"#, template: "$1")
+        output = replacing(output, pattern: #"\[([^\]]+)\]\([^\)]*\)"#, template: "$1")
+        output = replacing(output, pattern: #"(?m)^\s{0,3}#{1,6}\s+"#, template: "")
+        output = replacing(output, pattern: #"(?m)^\s{0,3}>\s?"#, template: "")
+        output = replacing(output, pattern: #"(?m)^\s*[-*+]\s+"#, template: "")
+        output = replacing(output, pattern: #"(?m)^\s*\d+\.\s+"#, template: "")
+        output = replacing(output, pattern: #"\*\*([^*]+)\*\*|__([^_]+)__"#, template: "$1$2")
+        output = replacing(output, pattern: #"\*([^*]+)\*|_([^_]+)_"#, template: "$1$2")
+        output = replacing(output, pattern: #"`([^`]+)`"#, template: "$1")
+        return output.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    func htmlToMarkdown(_ html: String) -> String {
+        var output = html
+        output = replacing(output, pattern: #"(?is)<script\b[^>]*>.*?</script\s*>"#, template: "")
+        output = replacing(output, pattern: #"(?is)<style\b[^>]*>.*?</style\s*>"#, template: "")
+        output = replacing(output, pattern: #"(?i)<\s*h1\b[^>]*>(.*?)</\s*h1\s*>"#, template: "# $1\n")
+        output = replacing(output, pattern: #"(?i)<\s*h2\b[^>]*>(.*?)</\s*h2\s*>"#, template: "## $1\n")
+        output = replacing(output, pattern: #"(?i)<\s*h3\b[^>]*>(.*?)</\s*h3\s*>"#, template: "### $1\n")
+        output = replacing(output, pattern: #"(?i)<\s*(strong|b)\b[^>]*>(.*?)</\s*\1\s*>"#, template: "**$2**")
+        output = replacing(output, pattern: #"(?i)<\s*(em|i)\b[^>]*>(.*?)</\s*\1\s*>"#, template: "*$2*")
+        output = replacing(output, pattern: #"(?i)<\s*a\b[^>]*href\s*=\s*["']([^"']+)["'][^>]*>(.*?)</\s*a\s*>"#, template: "[$2]($1)")
+        output = replacing(output, pattern: #"(?i)<\s*li\b[^>]*>(.*?)</\s*li\s*>"#, template: "- $1\n")
+        output = replacing(output, pattern: #"(?i)<\s*br\s*/?\s*>"#, template: "\n")
+        output = replacing(output, pattern: #"(?i)</\s*(p|div|section|article|ul|ol)\s*>"#, template: "\n")
+        output = replacing(output, pattern: #"(?s)<[^>]+>"#, template: "")
+        return decodeHTMLEntities(output).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    func markdownToHTML(_ markdown: String) -> String {
+        let lines = markdown.components(separatedBy: .newlines)
+        var htmlLines: [String] = []
+
+        for line in lines {
+            if line.hasPrefix("# ") {
+                htmlLines.append("<h1>\(inlineMarkdownToHTML(String(line.dropFirst(2))))</h1>")
+            } else if line.hasPrefix("## ") {
+                htmlLines.append("<h2>\(inlineMarkdownToHTML(String(line.dropFirst(3))))</h2>")
+            } else if line.hasPrefix("### ") {
+                htmlLines.append("<h3>\(inlineMarkdownToHTML(String(line.dropFirst(4))))</h3>")
+            } else if let match = line.range(of: #"^\s*[-*+]\s+"#, options: .regularExpression) {
+                htmlLines.append("<p>• \(inlineMarkdownToHTML(String(line[match.upperBound...])))</p>")
+            } else if line.trimmingCharacters(in: .whitespaces).isEmpty {
+                htmlLines.append("")
+            } else {
+                htmlLines.append("<p>\(inlineMarkdownToHTML(line))</p>")
+            }
+        }
+
+        return htmlLines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    func inlineMarkdownToHTML(_ text: String) -> String {
+        var output = htmlEscaped(text)
+        output = replacing(output, pattern: #"\*\*([^*]+)\*\*"#, template: "<strong>$1</strong>")
+        output = replacing(output, pattern: #"\*([^*]+)\*"#, template: "<em>$1</em>")
+        output = replacing(output, pattern: #"`([^`]+)`"#, template: "<code>$1</code>")
+        output = replacing(output, pattern: #"\[([^\]]+)\]\(([^\)]+)\)"#, template: #"<a href="$2">$1</a>"#)
+        return output
+    }
+
+    func attributedHTML(_ html: String) -> NSAttributedString? {
+        guard let data = html.data(using: .utf8) else { return nil }
+        return try? NSAttributedString(
+            data: data,
+            options: [
+                .documentType: NSAttributedString.DocumentType.html,
+                .characterEncoding: String.Encoding.utf8.rawValue
+            ],
+            documentAttributes: nil
+        )
+    }
+
+    func decodeHTMLEntities(_ input: String) -> String {
+        input
+            .replacingOccurrences(of: "&nbsp;", with: " ")
+            .replacingOccurrences(of: "&quot;", with: "\"")
+            .replacingOccurrences(of: "&#39;", with: "'")
+            .replacingOccurrences(of: "&apos;", with: "'")
+            .replacingOccurrences(of: "&lt;", with: "<")
+            .replacingOccurrences(of: "&gt;", with: ">")
+            .replacingOccurrences(of: "&amp;", with: "&")
+    }
+
+    func htmlEscaped(_ input: String) -> String {
+        input
+            .replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
+            .replacingOccurrences(of: "\"", with: "&quot;")
+    }
+
+    func replacing(_ input: String, pattern: String, template: String) -> String {
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return input }
+        return regex.stringByReplacingMatches(in: input, range: NSRange(location: 0, length: (input as NSString).length), withTemplate: template)
     }
 
     func renderLine(_ line: String) -> NSAttributedString {
