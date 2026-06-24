@@ -120,6 +120,22 @@ final class GlyphSiftTests: XCTestCase {
         XCTAssertEqual(OutputFormat.available(for: .markdown), [.raw, .plainText, .markdown, .html, .richText])
     }
 
+    func testRichTextOffersFormattedOutputsWithoutRaw() {
+        XCTAssertEqual(OutputFormat.available(for: .richText), [.plainText, .markdown, .html, .richText])
+    }
+
+    func testPasteboardFormatDetectsRichText() {
+        let detector = PasteboardSourceFormatDetector()
+
+        XCTAssertEqual(detector.detect(types: ["public.utf8-plain-text", "public.rtf"]), .richText)
+    }
+
+    func testPasteboardFormatDetectsHTML() {
+        let detector = PasteboardSourceFormatDetector()
+
+        XCTAssertEqual(detector.detect(types: ["public.html", "public.utf8-plain-text"]), .html)
+    }
+
     func testRawMarkdownPreservesMarkupWhileCleaningText() throws {
         let cleaner = SourcePreservingCleaner()
         let raw = cleaner.clean("## “Title”\n\nThis\u{00A0}has\u{200B}spaces.", sourceFormat: .markdown, preset: .aggressiveClean, settings: .default)

@@ -6,17 +6,24 @@ struct HighlightedTextView: NSViewRepresentable {
     var findings: [CleaningFinding]
     var isEditable: Bool
     var placeholder: String
+    var onPaste: ((NSPasteboard) -> Void)? = nil
 
     func makeCoordinator() -> Coordinator {
         Coordinator(parent: self)
     }
 
     func makeNSView(context: Context) -> NSScrollView {
-        let scrollView = NSTextView.scrollableTextView()
-        guard let textView = scrollView.documentView as? NSTextView else {
-            return scrollView
-        }
+        let textView = PasteAwareTextView()
+        let scrollView = NSScrollView()
+        scrollView.hasVerticalScroller = true
+        scrollView.hasHorizontalScroller = true
+        scrollView.autohidesScrollers = false
+        scrollView.borderType = .bezelBorder
+        scrollView.documentView = textView
         textView.delegate = context.coordinator
+        textView.onPaste = { pasteboard in
+            context.coordinator.parent.onPaste?(pasteboard)
+        }
         textView.isEditable = isEditable
         textView.isSelectable = true
         textView.allowsUndo = true
@@ -24,6 +31,13 @@ struct HighlightedTextView: NSViewRepresentable {
         textView.textContainerInset = NSSize(width: 10, height: 10)
         textView.drawsBackground = true
         textView.backgroundColor = NSColor.textBackgroundColor
+        textView.minSize = NSSize(width: 0, height: 0)
+        textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+        textView.isVerticallyResizable = true
+        textView.isHorizontallyResizable = true
+        textView.autoresizingMask = [.width]
+        textView.textContainer?.containerSize = NSSize(width: scrollView.contentSize.width, height: CGFloat.greatestFiniteMagnitude)
+        textView.textContainer?.widthTracksTextView = true
         return scrollView
     }
 
@@ -31,6 +45,11 @@ struct HighlightedTextView: NSViewRepresentable {
         guard let textView = scrollView.documentView as? NSTextView else { return }
         context.coordinator.parent = self
         textView.isEditable = isEditable
+        if let pasteAwareTextView = textView as? PasteAwareTextView {
+            pasteAwareTextView.onPaste = { pasteboard in
+                context.coordinator.parent.onPaste?(pasteboard)
+            }
+        }
 
         let displayText = isEditable ? text : (text.isEmpty ? placeholder : text)
         let attributed = NSMutableAttributedString(
@@ -113,5 +132,14 @@ struct HighlightedTextView: NSViewRepresentable {
             textView.string = ""
             previousTextLength = 0
         }
+    }
+}
+
+private final class PasteAwareTextView: NSTextView {
+    var onPaste: ((NSPasteboard) -> Void)?
+
+    override func paste(_ sender: Any?) {
+        onPaste?(NSPasteboard.general)
+        super.paste(sender)
     }
 }

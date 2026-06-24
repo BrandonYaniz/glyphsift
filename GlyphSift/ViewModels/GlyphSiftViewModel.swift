@@ -46,9 +46,11 @@ final class GlyphSiftViewModel: ObservableObject {
     private let engine = CleaningEngine()
     private let renderer = OutputRenderer()
     private let formatDetector = SourceFormatDetector()
+    private let pasteboardFormatDetector = PasteboardSourceFormatDetector()
     private let sourcePreservingCleaner = SourcePreservingCleaner()
     private let store = SettingsStore()
     private var isUpdatingSettings = false
+    private var pastedSourceFormat: SourceFormat?
 
     init() {
         let loaded = store.load()
@@ -59,7 +61,11 @@ final class GlyphSiftViewModel: ObservableObject {
     }
 
     func recompute() {
-        sourceFormat = formatDetector.detect(originalText)
+        if originalText.isEmpty {
+            pastedSourceFormat = nil
+        }
+
+        sourceFormat = pastedSourceFormat ?? formatDetector.detect(originalText)
         availableOutputFormats = OutputFormat.available(for: sourceFormat)
         if !availableOutputFormats.contains(selectedOutputFormat) {
             selectedOutputFormat = availableOutputFormats.first ?? .plainText
@@ -109,7 +115,13 @@ final class GlyphSiftViewModel: ObservableObject {
 
     func clear() {
         originalText = ""
+        pastedSourceFormat = nil
         statusMessage = nil
+    }
+
+    func capturePasteboard(_ pasteboard: NSPasteboard) {
+        let typeNames = pasteboard.types?.map(\.rawValue) ?? []
+        pastedSourceFormat = pasteboardFormatDetector.detect(types: typeNames)
     }
 
     func addRegexRule() {
@@ -186,6 +198,7 @@ private extension GlyphSiftViewModel {
         if rule.dotMatchesNewline { options.insert(.dotMatchesLineSeparators) }
         return options
     }
+
 }
 
 private func normalizeRuleOrder(_ rules: inout [RegexRule]) {

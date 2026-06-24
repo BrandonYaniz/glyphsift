@@ -39,6 +39,18 @@ struct SourceFormatDetector {
     }
 }
 
+struct PasteboardSourceFormatDetector {
+    func detect(types: [String]) -> SourceFormat? {
+        if types.contains("public.rtf") || types.contains("com.apple.flat-rtfd") {
+            return .richText
+        }
+        if types.contains("public.html") {
+            return .html
+        }
+        return nil
+    }
+}
+
 private extension SourceFormatDetector {
     func looksLikeHTML(_ text: String) -> Bool {
         if text.range(of: #"(?is)^\s*<!doctype\s+html\b"#, options: .regularExpression) != nil {

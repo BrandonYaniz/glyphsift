@@ -87,7 +87,8 @@ struct ContentView: View {
                 text: $viewModel.originalText,
                 findings: viewModel.selectedResult.findings,
                 isEditable: true,
-                placeholder: "Paste text here."
+                placeholder: "Paste text here.",
+                onPaste: viewModel.capturePasteboard
             )
             if markerPreview != viewModel.originalText, !viewModel.originalText.isEmpty {
                 VStack(alignment: .leading, spacing: 4) {
