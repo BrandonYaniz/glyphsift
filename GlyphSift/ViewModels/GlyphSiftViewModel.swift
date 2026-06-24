@@ -48,9 +48,11 @@ final class GlyphSiftViewModel: ObservableObject {
     private let formatDetector = SourceFormatDetector()
     private let pasteboardFormatDetector = PasteboardSourceFormatDetector()
     private let sourcePreservingCleaner = SourcePreservingCleaner()
+    private let attributedTextCleaner = AttributedTextCleaner()
     private let store = SettingsStore()
     private var isUpdatingSettings = false
     private var pastedSourceFormat: SourceFormat?
+    private var pastedAttributedText: NSAttributedString?
 
     init() {
         let loaded = store.load()
@@ -63,6 +65,7 @@ final class GlyphSiftViewModel: ObservableObject {
     func recompute() {
         if originalText.isEmpty {
             pastedSourceFormat = nil
+            pastedAttributedText = nil
         }
 
         sourceFormat = pastedSourceFormat ?? formatDetector.detect(originalText)
@@ -75,7 +78,8 @@ final class GlyphSiftViewModel: ObservableObject {
         selectedResult = engine.analyze(originalText, preset: selectedPreset, settings: settings)
         cleanedText = selectedResult.cleaned
         let rawText = sourcePreservingCleaner.clean(originalText, sourceFormat: sourceFormat, preset: selectedPreset, settings: settings)
-        renderedOutput = (try? renderer.render(selectedResult, format: selectedOutputFormat, sourceFormat: sourceFormat, rawText: rawText)) ?? RenderedOutput(displayText: cleanedText, plainText: cleanedText, attributedString: nil, rtfData: nil)
+        let richText = cleanedRichText(for: selectedResult)
+        renderedOutput = (try? renderer.render(selectedResult, format: selectedOutputFormat, sourceFormat: sourceFormat, rawText: rawText, richText: richText)) ?? RenderedOutput(displayText: cleanedText, plainText: cleanedText, attributedString: nil, rtfData: nil)
 
         var counts: [CleaningPreset: Int] = [:]
         for preset in CleaningPreset.allCases {
@@ -116,12 +120,14 @@ final class GlyphSiftViewModel: ObservableObject {
     func clear() {
         originalText = ""
         pastedSourceFormat = nil
+        pastedAttributedText = nil
         statusMessage = nil
     }
 
     func capturePasteboard(_ pasteboard: NSPasteboard) {
         let typeNames = pasteboard.types?.map(\.rawValue) ?? []
         pastedSourceFormat = pasteboardFormatDetector.detect(types: typeNames)
+        pastedAttributedText = richText(from: pasteboard)
     }
 
     func addRegexRule() {
@@ -199,6 +205,24 @@ private extension GlyphSiftViewModel {
         return options
     }
 
+    func cleanedRichText(for result: CleaningResult) -> NSAttributedString? {
+        guard sourceFormat == .richText, let pastedAttributedText else {
+            return nil
+        }
+        return attributedTextCleaner.clean(pastedAttributedText, result: result)
+    }
+
+    func richText(from pasteboard: NSPasteboard) -> NSAttributedString? {
+        if let data = pasteboard.data(forType: .rtf),
+           let attributed = try? NSAttributedString(
+            data: data,
+            options: [.documentType: NSAttributedString.DocumentType.rtf],
+            documentAttributes: nil
+           ) {
+            return attributed
+        }
+        return nil
+    }
 }
 
 private func normalizeRuleOrder(_ rules: inout [RegexRule]) {

@@ -1,3 +1,4 @@
+import AppKit
 import XCTest
 @testable import GlyphSift
 
@@ -163,5 +164,29 @@ final class GlyphSiftTests: XCTestCase {
         let output = try OutputRenderer().render(result, format: .plainText, sourceFormat: .html, rawText: result.cleaned)
 
         XCTAssertEqual(output.plainText, "Heading\nA line")
+    }
+
+    func testAttributedCleanerPreservesFormattingWhenTextIsCleaned() throws {
+        let input = NSMutableAttributedString(string: "“Bold”\u{00A0}text")
+        input.addAttribute(.font, value: NSFont.boldSystemFont(ofSize: 14), range: NSRange(location: 1, length: 4))
+        let result = engine.analyze(input.string, preset: .publishingClean, settings: .default)
+
+        let output = AttributedTextCleaner().clean(input, result: result)
+        let font = try XCTUnwrap(output.attribute(.font, at: 1, effectiveRange: nil) as? NSFont)
+
+        XCTAssertEqual(output.string, "\"Bold\" text")
+        XCTAssertTrue(NSFontManager.shared.traits(of: font).contains(.boldFontMask))
+    }
+
+    func testRendererUsesCleanedRichTextWhenAvailable() throws {
+        let input = NSMutableAttributedString(string: "Bold")
+        input.addAttribute(.font, value: NSFont.boldSystemFont(ofSize: 14), range: NSRange(location: 0, length: 4))
+        let result = engine.analyze(input.string, preset: .plainText, settings: .default)
+
+        let output = try OutputRenderer().render(result, format: .richText, sourceFormat: .richText, rawText: result.cleaned, richText: input)
+        let font = try XCTUnwrap(output.attributedString?.attribute(.font, at: 0, effectiveRange: nil) as? NSFont)
+
+        XCTAssertEqual(output.plainText, "Bold")
+        XCTAssertTrue(NSFontManager.shared.traits(of: font).contains(.boldFontMask))
     }
 }

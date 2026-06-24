@@ -2,11 +2,11 @@ import AppKit
 import Foundation
 
 protocol OutputRendering {
-    func render(_ result: CleaningResult, format: OutputFormat, sourceFormat: SourceFormat, rawText: String) throws -> RenderedOutput
+    func render(_ result: CleaningResult, format: OutputFormat, sourceFormat: SourceFormat, rawText: String, richText: NSAttributedString?) throws -> RenderedOutput
 }
 
 struct OutputRenderer: OutputRendering {
-    func render(_ result: CleaningResult, format: OutputFormat, sourceFormat: SourceFormat, rawText: String) throws -> RenderedOutput {
+    func render(_ result: CleaningResult, format: OutputFormat, sourceFormat: SourceFormat, rawText: String, richText: NSAttributedString? = nil) throws -> RenderedOutput {
         switch format {
         case .raw:
             return RenderedOutput(displayText: rawText, plainText: rawText, attributedString: nil, rtfData: nil)
@@ -20,7 +20,7 @@ struct OutputRenderer: OutputRendering {
             let html = renderHTML(result.cleaned, sourceFormat: sourceFormat, rawText: rawText)
             return RenderedOutput(displayText: html, plainText: html, attributedString: nil, rtfData: nil)
         case .richText:
-            let attributed = renderRichText(result.cleaned, sourceFormat: sourceFormat, rawText: rawText)
+            let attributed = renderRichText(result.cleaned, sourceFormat: sourceFormat, rawText: rawText, richText: richText)
             let rtf = try? attributed.data(
                 from: NSRange(location: 0, length: attributed.length),
                 documentAttributes: [.documentType: NSAttributedString.DocumentType.rtf]
@@ -64,13 +64,15 @@ private extension OutputRenderer {
         }
     }
 
-    func renderRichText(_ cleaned: String, sourceFormat: SourceFormat, rawText: String) -> NSAttributedString {
+    func renderRichText(_ cleaned: String, sourceFormat: SourceFormat, rawText: String, richText: NSAttributedString?) -> NSAttributedString {
         switch sourceFormat {
         case .html:
             return attributedHTML(rawText) ?? NSAttributedString(string: htmlToPlainText(rawText))
         case .markdown:
             return renderMarkdownAsRichText(rawText)
-        case .plainText, .richText:
+        case .richText:
+            return richText ?? NSAttributedString(string: cleaned)
+        case .plainText:
             return NSAttributedString(string: cleaned)
         }
     }
