@@ -49,6 +49,7 @@ final class GlyphSiftViewModel: ObservableObject {
     private let pasteboardFormatDetector = PasteboardSourceFormatDetector()
     private let sourcePreservingCleaner = SourcePreservingCleaner()
     private let attributedTextCleaner = AttributedTextCleaner()
+    private let clipboardWriter = ClipboardWriter()
     private let store = SettingsStore()
     private var isUpdatingSettings = false
     private var pastedSourceFormat: SourceFormat?
@@ -95,26 +96,7 @@ final class GlyphSiftViewModel: ObservableObject {
     }
 
     func copyCleanedOutput() {
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-
-        switch selectedOutputFormat {
-        case .raw, .markdown, .html:
-            pasteboard.setString(renderedOutput.plainText, forType: .string)
-            statusMessage = "Copied"
-        case .plainText:
-            pasteboard.setString(renderedOutput.plainText, forType: .string)
-            statusMessage = "Copied"
-        case .richText:
-            if let rtfData = renderedOutput.rtfData {
-                pasteboard.setData(rtfData, forType: .rtf)
-                pasteboard.setString(renderedOutput.plainText, forType: .string)
-                statusMessage = "Copied"
-            } else {
-                pasteboard.setString(renderedOutput.plainText, forType: .string)
-                statusMessage = "Rich Text rendering failed, copied plain text instead."
-            }
-        }
+        statusMessage = clipboardWriter.write(renderedOutput, format: selectedOutputFormat, sourceFormat: sourceFormat)
     }
 
     func clear() {

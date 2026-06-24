@@ -189,4 +189,28 @@ final class GlyphSiftTests: XCTestCase {
         XCTAssertEqual(output.plainText, "Bold")
         XCTAssertTrue(NSFontManager.shared.traits(of: font).contains(.boldFontMask))
     }
+
+    func testClipboardWriterCopiesHTMLWithPlainTextFallback() {
+        let pasteboard = NSPasteboard(name: NSPasteboard.Name("GlyphSiftHTML.\(UUID().uuidString)"))
+        let output = RenderedOutput(displayText: "<p>Hello</p>", plainText: "<p>Hello</p>", attributedString: nil, rtfData: nil)
+
+        let message = ClipboardWriter().write(output, format: .html, sourceFormat: .markdown, to: pasteboard)
+
+        XCTAssertEqual(message, "Copied")
+        XCTAssertEqual(pasteboard.string(forType: .html), "<p>Hello</p>")
+        XCTAssertEqual(pasteboard.string(forType: .string), "<p>Hello</p>")
+    }
+
+    func testClipboardWriterCopiesRichTextWithPlainTextFallback() throws {
+        let pasteboard = NSPasteboard(name: NSPasteboard.Name("GlyphSiftRTF.\(UUID().uuidString)"))
+        let attributed = NSAttributedString(string: "Hello", attributes: [.font: NSFont.boldSystemFont(ofSize: 14)])
+        let rtf = try XCTUnwrap(try? attributed.data(from: NSRange(location: 0, length: attributed.length), documentAttributes: [.documentType: NSAttributedString.DocumentType.rtf]))
+        let output = RenderedOutput(displayText: "Hello", plainText: "Hello", attributedString: attributed, rtfData: rtf)
+
+        let message = ClipboardWriter().write(output, format: .richText, sourceFormat: .richText, to: pasteboard)
+
+        XCTAssertEqual(message, "Copied")
+        XCTAssertNotNil(pasteboard.data(forType: .rtf))
+        XCTAssertEqual(pasteboard.string(forType: .string), "Hello")
+    }
 }
