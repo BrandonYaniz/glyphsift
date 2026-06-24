@@ -191,6 +191,22 @@ final class GlyphSiftTests: XCTestCase {
         XCTAssertEqual(raw, "<style>.title::before { content: “keep”; }</style><p>\"Clean\"</p>")
     }
 
+    func testRawHTMLPreservesTagsWithGreaterThanInAttributes() throws {
+        let cleaner = SourcePreservingCleaner()
+        let input = "<p data-label=\"1 > 0\u{200B}\">“Clean”</p>"
+        let raw = cleaner.clean(input, sourceFormat: .html, preset: .aggressiveClean, settings: .default)
+
+        XCTAssertEqual(raw, "<p data-label=\"1 > 0\">\"Clean\"</p>")
+    }
+
+    func testRawHTMLCleansCommentsConservatively() throws {
+        let cleaner = SourcePreservingCleaner()
+        let input = "<!-- “keep” > marker\u{200B} -->\n<p>“Clean”</p>"
+        let raw = cleaner.clean(input, sourceFormat: .html, preset: .aggressiveClean, settings: .default)
+
+        XCTAssertEqual(raw, "<!-- “keep” > marker -->\n<p>\"Clean\"</p>")
+    }
+
     func testRendererConvertsMarkdownToPlainText() throws {
         let result = engine.analyze("## Heading\n\nA [link](https://example.com)", preset: .plainText, settings: .default)
         let output = try OutputRenderer().render(result, format: .plainText, sourceFormat: .markdown, rawText: result.cleaned)

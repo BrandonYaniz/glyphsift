@@ -24,11 +24,11 @@ private extension SourcePreservingCleaner {
     func segments(in input: String, sourceFormat: SourceFormat) -> [SourceSegment] {
         switch sourceFormat {
         case .html:
-            let tagSegments = ranges(in: input, patterns: [#"(?s)<[^>]+>"#])
-                .map { SourceSegment(range: $0, policy: .protected) }
+            let sourceMarkupSegments = htmlSourceMarkupRanges(in: input)
+                .map { SourceSegment(range: $0, policy: .conservative) }
             let sourceSegments = htmlSourceContentRanges(in: input)
                 .map { SourceSegment(range: $0, policy: .conservative) }
-            return mergedSegments(tagSegments + sourceSegments)
+            return mergedSegments(sourceMarkupSegments + sourceSegments)
         case .markdown:
             return markdownSegments(in: input)
         default:
@@ -91,6 +91,14 @@ private extension SourcePreservingCleaner {
 
     func htmlSourceContentRanges(in input: String) -> [NSRange] {
         ranges(in: input, patterns: [#"(?is)<script\b[^>]*>(.*?)</script\s*>"#, #"(?is)<style\b[^>]*>(.*?)</style\s*>"#], captureIndex: 1)
+    }
+
+    func htmlSourceMarkupRanges(in input: String) -> [NSRange] {
+        ranges(in: input, patterns: [
+            #"(?s)<!--.*?-->"#,
+            #"(?s)<!\[CDATA\[.*?\]\]>"#,
+            #"<(?:"[^"]*"|'[^']*'|[^'"<>])*>"#
+        ])
     }
 
     func ranges(in input: String, patterns: [String]) -> [NSRange] {
