@@ -27,6 +27,20 @@ final class GlyphSiftTests: XCTestCase {
         XCTAssertEqual(result.findings.filter { $0.category == .hiddenUnicode }.count, 1)
     }
 
+    func testPrivacyCleanRemovesVariationSelectors() {
+        let result = engine.analyze("text\u{FE0F}", preset: .privacyClean, settings: .default)
+
+        XCTAssertEqual(result.cleaned, "text")
+        XCTAssertEqual(result.findings.filter { $0.category == .hiddenUnicode }.count, 1)
+    }
+
+    func testPrivacyCleanRemovesSoftHyphen() {
+        let result = engine.analyze("soft\u{00AD}hyphen", preset: .privacyClean, settings: .default)
+
+        XCTAssertEqual(result.cleaned, "softhyphen")
+        XCTAssertEqual(result.findings.filter { $0.category == .hiddenUnicode }.count, 1)
+    }
+
     func testPlainTextNormalizesNonbreakingSpace() {
         let result = engine.analyze("Hello\u{00A0}World", preset: .plainText, settings: .default)
 
