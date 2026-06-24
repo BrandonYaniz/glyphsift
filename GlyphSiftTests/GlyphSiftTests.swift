@@ -246,6 +246,48 @@ final class GlyphSiftTests: XCTestCase {
         XCTAssertTrue(NSFontManager.shared.traits(of: font).contains(.boldFontMask))
     }
 
+    func testRendererConvertsMarkdownHeadingsToRichText() throws {
+        let result = engine.analyze("# Heading", preset: .plainText, settings: .default)
+        let output = try OutputRenderer().render(result, format: .richText, sourceFormat: .markdown, rawText: result.cleaned)
+        let font = try XCTUnwrap(output.attributedString?.attribute(.font, at: 0, effectiveRange: nil) as? NSFont)
+
+        XCTAssertEqual(output.plainText, "Heading")
+        XCTAssertEqual(font.pointSize, 24)
+        XCTAssertTrue(NSFontManager.shared.traits(of: font).contains(.boldFontMask))
+    }
+
+    func testRendererConvertsMarkdownListsToRichText() throws {
+        let result = engine.analyze("- First\n1. Second", preset: .plainText, settings: .default)
+        let output = try OutputRenderer().render(result, format: .richText, sourceFormat: .markdown, rawText: result.cleaned)
+
+        XCTAssertEqual(output.plainText, "• First\n1. Second")
+    }
+
+    func testRendererConvertsInlineMarkdownToRichText() throws {
+        let result = engine.analyze("Use **bold**, *italic*, and `code`.", preset: .plainText, settings: .default)
+        let output = try OutputRenderer().render(result, format: .richText, sourceFormat: .markdown, rawText: result.cleaned)
+        let attributed = try XCTUnwrap(output.attributedString)
+        let text = attributed.string as NSString
+        let boldFont = try XCTUnwrap(attributed.attribute(.font, at: text.range(of: "bold").location, effectiveRange: nil) as? NSFont)
+        let italicFont = try XCTUnwrap(attributed.attribute(.font, at: text.range(of: "italic").location, effectiveRange: nil) as? NSFont)
+        let codeFont = try XCTUnwrap(attributed.attribute(.font, at: text.range(of: "code").location, effectiveRange: nil) as? NSFont)
+
+        XCTAssertEqual(attributed.string, "Use bold, italic, and code.")
+        XCTAssertTrue(NSFontManager.shared.traits(of: boldFont).contains(.boldFontMask))
+        XCTAssertTrue(NSFontManager.shared.traits(of: italicFont).contains(.italicFontMask))
+        XCTAssertTrue(codeFont.fontName.lowercased().contains("mono"))
+    }
+
+    func testRendererConvertsMarkdownLinksToRichText() throws {
+        let result = engine.analyze("[OpenAI](https://openai.com)", preset: .plainText, settings: .default)
+        let output = try OutputRenderer().render(result, format: .richText, sourceFormat: .markdown, rawText: result.cleaned)
+        let attributed = try XCTUnwrap(output.attributedString)
+        let link = try XCTUnwrap(attributed.attribute(.link, at: 0, effectiveRange: nil) as? URL)
+
+        XCTAssertEqual(attributed.string, "OpenAI")
+        XCTAssertEqual(link.absoluteString, "https://openai.com")
+    }
+
     func testClipboardWriterCopiesHTMLWithPlainTextFallback() {
         let pasteboard = NSPasteboard(name: NSPasteboard.Name("GlyphSiftHTML.\(UUID().uuidString)"))
         let output = RenderedOutput(displayText: "<p>Hello</p>", plainText: "<p>Hello</p>", attributedString: nil, rtfData: nil)
