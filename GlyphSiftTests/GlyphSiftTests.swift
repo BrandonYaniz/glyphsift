@@ -322,6 +322,17 @@ final class GlyphSiftTests: XCTestCase {
         XCTAssertEqual(output.warnings, ["Conversion is best effort. Raw keeps the most complete source when available."])
     }
 
+    func testRendererConvertsLowerMarkdownHeadingsToHTML() throws {
+        let result = engine.analyze("#### Detail\n##### Note\n###### Fine print", preset: .plainText, settings: .default)
+        let output = try OutputRenderer().render(result, format: .html, sourceFormat: .markdown, rawText: result.cleaned)
+
+        XCTAssertEqual(output.plainText, """
+<h4>Detail</h4>
+<h5>Note</h5>
+<h6>Fine print</h6>
+""")
+    }
+
     func testRendererConvertsMarkdownListsToHTMLLists() throws {
         let result = engine.analyze("- One\n- Two\n\n1. First\n2. Second", preset: .plainText, settings: .default)
         let output = try OutputRenderer().render(result, format: .html, sourceFormat: .markdown, rawText: result.cleaned)
@@ -345,6 +356,13 @@ final class GlyphSiftTests: XCTestCase {
 
         XCTAssertEqual(output.plainText, "# Heading\nA **bold** [link](https://example.com)")
         XCTAssertEqual(output.warnings, ["Conversion is best effort. Raw keeps the most complete source when available."])
+    }
+
+    func testRendererConvertsLowerHTMLHeadingsToMarkdown() throws {
+        let result = engine.analyze("<h4>Detail</h4><h5>Note</h5><h6>Fine print</h6>", preset: .plainText, settings: .default)
+        let output = try OutputRenderer().render(result, format: .markdown, sourceFormat: .html, rawText: result.cleaned)
+
+        XCTAssertEqual(output.plainText, "#### Detail\n##### Note\n###### Fine print")
     }
 
     func testRendererConvertsUnquotedHTMLLinksToMarkdown() throws {
@@ -410,6 +428,15 @@ final class GlyphSiftTests: XCTestCase {
 
         XCTAssertEqual(output.plainText, "Heading")
         XCTAssertEqual(font.pointSize, 24)
+        XCTAssertTrue(NSFontManager.shared.traits(of: font).contains(.boldFontMask))
+    }
+
+    func testRendererConvertsLowerMarkdownHeadingsToRichText() throws {
+        let result = engine.analyze("###### Fine print", preset: .plainText, settings: .default)
+        let output = try OutputRenderer().render(result, format: .richText, sourceFormat: .markdown, rawText: result.cleaned)
+        let font = try XCTUnwrap(output.attributedString?.attribute(.font, at: 0, effectiveRange: nil) as? NSFont)
+
+        XCTAssertEqual(output.plainText, "Fine print")
         XCTAssertTrue(NSFontManager.shared.traits(of: font).contains(.boldFontMask))
     }
 

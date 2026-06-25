@@ -141,6 +141,9 @@ private extension OutputRenderer {
         output = replacing(output, pattern: #"(?i)<\s*h1\b[^>]*>(.*?)</\s*h1\s*>"#, template: "# $1\n")
         output = replacing(output, pattern: #"(?i)<\s*h2\b[^>]*>(.*?)</\s*h2\s*>"#, template: "## $1\n")
         output = replacing(output, pattern: #"(?i)<\s*h3\b[^>]*>(.*?)</\s*h3\s*>"#, template: "### $1\n")
+        output = replacing(output, pattern: #"(?i)<\s*h4\b[^>]*>(.*?)</\s*h4\s*>"#, template: "#### $1\n")
+        output = replacing(output, pattern: #"(?i)<\s*h5\b[^>]*>(.*?)</\s*h5\s*>"#, template: "##### $1\n")
+        output = replacing(output, pattern: #"(?i)<\s*h6\b[^>]*>(.*?)</\s*h6\s*>"#, template: "###### $1\n")
         output = replacing(output, pattern: #"(?i)<\s*(strong|b)\b[^>]*>(.*?)</\s*\1\s*>"#, template: "**$2**")
         output = replacing(output, pattern: #"(?i)<\s*(em|i)\b[^>]*>(.*?)</\s*\1\s*>"#, template: "*$2*")
         output = replacing(output, pattern: #"(?i)<\s*code\b[^>]*>(.*?)</\s*code\s*>"#, template: "`$1`")
@@ -205,9 +208,9 @@ private extension OutputRenderer {
             } else if line.hasPrefix("## ") {
                 closeOpenList()
                 htmlLines.append("<h2>\(inlineMarkdownToHTML(String(line.dropFirst(3))))</h2>")
-            } else if line.hasPrefix("### ") {
+            } else if let heading = markdownHeading(in: line) {
                 closeOpenList()
-                htmlLines.append("<h3>\(inlineMarkdownToHTML(String(line.dropFirst(4))))</h3>")
+                htmlLines.append("<h\(heading.level)>\(inlineMarkdownToHTML(heading.text))</h\(heading.level)>")
             } else if let match = line.range(of: #"^\s*[-*+]\s+"#, options: .regularExpression) {
                 if openListTag != "ul" {
                     closeOpenList()
@@ -233,6 +236,13 @@ private extension OutputRenderer {
 
         closeOpenList()
         return htmlLines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    func markdownHeading(in line: String) -> (level: Int, text: String)? {
+        guard let match = line.range(of: #"^#{1,6}\s+"#, options: .regularExpression) else {
+            return nil
+        }
+        return (line[line.startIndex..<match.upperBound].filter { $0 == "#" }.count, String(line[match.upperBound...]))
     }
 
     func inlineMarkdownToHTML(_ text: String) -> String {
@@ -315,14 +325,8 @@ private extension OutputRenderer {
     }
 
     func renderLine(_ line: String) -> NSAttributedString {
-        if line.hasPrefix("# ") {
-            return styledLine(String(line.dropFirst(2)), font: .boldSystemFont(ofSize: 24), spacing: 8)
-        }
-        if line.hasPrefix("## ") {
-            return styledLine(String(line.dropFirst(3)), font: .boldSystemFont(ofSize: 20), spacing: 6)
-        }
-        if line.hasPrefix("### ") {
-            return styledLine(String(line.dropFirst(4)), font: .systemFont(ofSize: 17, weight: .semibold), spacing: 4)
+        if let heading = markdownHeading(in: line) {
+            return styledLine(heading.text, font: headingFont(for: heading.level), spacing: headingSpacing(for: heading.level))
         }
 
         let unorderedPrefixes = ["- ", "* ", "+ "]
@@ -339,6 +343,34 @@ private extension OutputRenderer {
         }
 
         return styledLine(line, font: .systemFont(ofSize: 13), spacing: 6, parseInline: true)
+    }
+
+    func headingFont(for level: Int) -> NSFont {
+        switch level {
+        case 1:
+            return .boldSystemFont(ofSize: 24)
+        case 2:
+            return .boldSystemFont(ofSize: 20)
+        case 3:
+            return .systemFont(ofSize: 17, weight: .semibold)
+        case 4:
+            return .systemFont(ofSize: 15, weight: .semibold)
+        case 5:
+            return .systemFont(ofSize: 14, weight: .semibold)
+        default:
+            return .systemFont(ofSize: 13, weight: .semibold)
+        }
+    }
+
+    func headingSpacing(for level: Int) -> CGFloat {
+        switch level {
+        case 1:
+            return 8
+        case 2:
+            return 6
+        default:
+            return 4
+        }
     }
 
     func styledLine(_ text: String, font: NSFont, spacing: CGFloat, parseInline: Bool = false) -> NSAttributedString {
