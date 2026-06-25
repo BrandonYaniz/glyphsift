@@ -432,6 +432,17 @@ final class GlyphSiftTests: XCTestCase {
         XCTAssertEqual(pasteboard.string(forType: .string), "<p>Hello</p>")
     }
 
+    func testClipboardWriterCopiesRawHTMLAsHTMLAndPlainText() {
+        let pasteboard = NSPasteboard(name: NSPasteboard.Name("GlyphSiftRawHTML.\(UUID().uuidString)"))
+        let output = RenderedOutput(displayText: "<article>Hello</article>", plainText: "<article>Hello</article>", attributedString: nil, rtfData: nil)
+
+        let message = ClipboardWriter().write(output, format: .raw, sourceFormat: .html, to: pasteboard)
+
+        XCTAssertEqual(message, "Copied")
+        XCTAssertEqual(pasteboard.string(forType: .html), "<article>Hello</article>")
+        XCTAssertEqual(pasteboard.string(forType: .string), "<article>Hello</article>")
+    }
+
     func testClipboardWriterCopiesRichTextWithPlainTextFallback() throws {
         let pasteboard = NSPasteboard(name: NSPasteboard.Name("GlyphSiftRTF.\(UUID().uuidString)"))
         let attributed = NSAttributedString(string: "Hello", attributes: [.font: NSFont.boldSystemFont(ofSize: 14)])
@@ -442,6 +453,17 @@ final class GlyphSiftTests: XCTestCase {
 
         XCTAssertEqual(message, "Copied")
         XCTAssertNotNil(pasteboard.data(forType: .rtf))
+        XCTAssertEqual(pasteboard.string(forType: .string), "Hello")
+    }
+
+    func testClipboardWriterFallsBackWhenRichTextDataIsMissing() {
+        let pasteboard = NSPasteboard(name: NSPasteboard.Name("GlyphSiftMissingRTF.\(UUID().uuidString)"))
+        let output = RenderedOutput(displayText: "Hello", plainText: "Hello", attributedString: NSAttributedString(string: "Hello"), rtfData: nil)
+
+        let message = ClipboardWriter().write(output, format: .richText, sourceFormat: .markdown, to: pasteboard)
+
+        XCTAssertEqual(message, "Rich Text rendering failed, copied plain text instead.")
+        XCTAssertNil(pasteboard.data(forType: .rtf))
         XCTAssertEqual(pasteboard.string(forType: .string), "Hello")
     }
 
