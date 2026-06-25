@@ -303,6 +303,26 @@ final class GlyphSiftTests: XCTestCase {
         XCTAssertEqual(output.warnings, ["Formatting is removed for Plain Text output."])
     }
 
+    func testRendererConvertsMarkdownToHTML() throws {
+        let result = engine.analyze("## Heading\n\nA **bold** [link](https://example.com)", preset: .plainText, settings: .default)
+        let output = try OutputRenderer().render(result, format: .html, sourceFormat: .markdown, rawText: result.cleaned)
+
+        XCTAssertEqual(output.plainText, """
+<h2>Heading</h2>
+
+<p>A <strong>bold</strong> <a href="https://example.com">link</a></p>
+""")
+        XCTAssertEqual(output.warnings, ["Conversion is best effort. Raw keeps the most complete source when available."])
+    }
+
+    func testRendererConvertsHTMLToMarkdown() throws {
+        let result = engine.analyze("<h1>Heading</h1><p>A <strong>bold</strong> <a href=\"https://example.com\">link</a></p>", preset: .plainText, settings: .default)
+        let output = try OutputRenderer().render(result, format: .markdown, sourceFormat: .html, rawText: result.cleaned)
+
+        XCTAssertEqual(output.plainText, "# Heading\nA **bold** [link](https://example.com)")
+        XCTAssertEqual(output.warnings, ["Conversion is best effort. Raw keeps the most complete source when available."])
+    }
+
     func testAttributedCleanerPreservesFormattingWhenTextIsCleaned() throws {
         let input = NSMutableAttributedString(string: "“Bold”\u{00A0}text")
         input.addAttribute(.font, value: NSFont.boldSystemFont(ofSize: 14), range: NSRange(location: 1, length: 4))
