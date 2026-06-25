@@ -322,6 +322,23 @@ final class GlyphSiftTests: XCTestCase {
         XCTAssertEqual(output.warnings, ["Conversion is best effort. Raw keeps the most complete source when available."])
     }
 
+    func testRendererConvertsMarkdownListsToHTMLLists() throws {
+        let result = engine.analyze("- One\n- Two\n\n1. First\n2. Second", preset: .plainText, settings: .default)
+        let output = try OutputRenderer().render(result, format: .html, sourceFormat: .markdown, rawText: result.cleaned)
+
+        XCTAssertEqual(output.plainText, """
+<ul>
+<li>One</li>
+<li>Two</li>
+</ul>
+
+<ol>
+<li>First</li>
+<li>Second</li>
+</ol>
+""")
+    }
+
     func testRendererConvertsHTMLToMarkdown() throws {
         let result = engine.analyze("<h1>Heading</h1><p>A <strong>bold</strong> <a href=\"https://example.com\">link</a></p>", preset: .plainText, settings: .default)
         let output = try OutputRenderer().render(result, format: .markdown, sourceFormat: .html, rawText: result.cleaned)

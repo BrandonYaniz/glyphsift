@@ -155,23 +155,49 @@ private extension OutputRenderer {
     func markdownToHTML(_ markdown: String) -> String {
         let lines = markdown.components(separatedBy: .newlines)
         var htmlLines: [String] = []
+        var openListTag: String?
+
+        func closeOpenList() {
+            if let tag = openListTag {
+                htmlLines.append("</\(tag)>")
+                openListTag = nil
+            }
+        }
 
         for line in lines {
             if line.hasPrefix("# ") {
+                closeOpenList()
                 htmlLines.append("<h1>\(inlineMarkdownToHTML(String(line.dropFirst(2))))</h1>")
             } else if line.hasPrefix("## ") {
+                closeOpenList()
                 htmlLines.append("<h2>\(inlineMarkdownToHTML(String(line.dropFirst(3))))</h2>")
             } else if line.hasPrefix("### ") {
+                closeOpenList()
                 htmlLines.append("<h3>\(inlineMarkdownToHTML(String(line.dropFirst(4))))</h3>")
             } else if let match = line.range(of: #"^\s*[-*+]\s+"#, options: .regularExpression) {
-                htmlLines.append("<p>• \(inlineMarkdownToHTML(String(line[match.upperBound...])))</p>")
+                if openListTag != "ul" {
+                    closeOpenList()
+                    htmlLines.append("<ul>")
+                    openListTag = "ul"
+                }
+                htmlLines.append("<li>\(inlineMarkdownToHTML(String(line[match.upperBound...])))</li>")
+            } else if let match = line.range(of: #"^\s*\d+\.\s+"#, options: .regularExpression) {
+                if openListTag != "ol" {
+                    closeOpenList()
+                    htmlLines.append("<ol>")
+                    openListTag = "ol"
+                }
+                htmlLines.append("<li>\(inlineMarkdownToHTML(String(line[match.upperBound...])))</li>")
             } else if line.trimmingCharacters(in: .whitespaces).isEmpty {
+                closeOpenList()
                 htmlLines.append("")
             } else {
+                closeOpenList()
                 htmlLines.append("<p>\(inlineMarkdownToHTML(line))</p>")
             }
         }
 
+        closeOpenList()
         return htmlLines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
