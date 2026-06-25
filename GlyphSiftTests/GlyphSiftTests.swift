@@ -130,6 +130,36 @@ final class GlyphSiftTests: XCTestCase {
         XCTAssertTrue(result.findings.filter { $0.category == .urlTracking }.isEmpty)
     }
 
+    func testURLTrackingCleanupMatchesParameterNamesCaseInsensitively() {
+        var settings = AppSettings.default
+        settings.urlCleaning.removeTrackingParameters = true
+
+        let result = engine.analyze("https://example.com/?UTM_Source=newsletter&id=42", preset: .aggressiveClean, settings: settings)
+
+        XCTAssertEqual(result.cleaned, "https://example.com/?id=42")
+        XCTAssertEqual(result.findings.filter { $0.category == .urlTracking }.count, 1)
+    }
+
+    func testURLTrackingCleanupRemovesEmptyQueryWhenOnlyTrackingRemains() {
+        var settings = AppSettings.default
+        settings.urlCleaning.removeTrackingParameters = true
+
+        let result = engine.analyze("https://example.com/?utm_source=newsletter.", preset: .aggressiveClean, settings: settings)
+
+        XCTAssertEqual(result.cleaned, "https://example.com/.")
+        XCTAssertEqual(result.findings.filter { $0.category == .urlTracking }.count, 1)
+    }
+
+    func testURLTrackingCleanupHandlesMultipleLinks() {
+        var settings = AppSettings.default
+        settings.urlCleaning.removeTrackingParameters = true
+
+        let result = engine.analyze("A https://a.com/?utm_source=x&id=1 B https://b.com/?fbclid=y&page=2", preset: .aggressiveClean, settings: settings)
+
+        XCTAssertEqual(result.cleaned, "A https://a.com/?id=1 B https://b.com/?page=2")
+        XCTAssertEqual(result.findings.filter { $0.category == .urlTracking }.count, 2)
+    }
+
     func testPresetCountsCanBeComputedFromFindings() {
         let result = engine.analyze("Hello\u{200B} “World”", preset: .aggressiveClean, settings: .default)
 
