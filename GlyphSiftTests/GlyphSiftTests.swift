@@ -303,6 +303,13 @@ final class GlyphSiftTests: XCTestCase {
         XCTAssertEqual(output.warnings, ["Formatting is removed for Plain Text output."])
     }
 
+    func testRendererDecodesNumericHTMLEntitiesToPlainText() throws {
+        let result = engine.analyze("<p>Copyright &#169; and smile &#x1F600;</p>", preset: .plainText, settings: .default)
+        let output = try OutputRenderer().render(result, format: .plainText, sourceFormat: .html, rawText: result.cleaned)
+
+        XCTAssertEqual(output.plainText, "Copyright © and smile 😀")
+    }
+
     func testRendererConvertsMarkdownToHTML() throws {
         let result = engine.analyze("## Heading\n\nA **bold** [link](https://example.com)", preset: .plainText, settings: .default)
         let output = try OutputRenderer().render(result, format: .html, sourceFormat: .markdown, rawText: result.cleaned)
@@ -321,6 +328,13 @@ final class GlyphSiftTests: XCTestCase {
 
         XCTAssertEqual(output.plainText, "# Heading\nA **bold** [link](https://example.com)")
         XCTAssertEqual(output.warnings, ["Conversion is best effort. Raw keeps the most complete source when available."])
+    }
+
+    func testRendererLeavesInvalidNumericHTMLEntitiesAlone() throws {
+        let result = engine.analyze("<p>Invalid &#999999999;</p>", preset: .plainText, settings: .default)
+        let output = try OutputRenderer().render(result, format: .markdown, sourceFormat: .html, rawText: result.cleaned)
+
+        XCTAssertEqual(output.plainText, "Invalid &#999999999;")
     }
 
     func testAttributedCleanerPreservesFormattingWhenTextIsCleaned() throws {
@@ -494,6 +508,7 @@ final class GlyphSiftTests: XCTestCase {
         XCTAssertEqual(output.warnings, ["Conversion is best effort. Raw keeps the most complete source when available."])
     }
 
+    @MainActor
     private func temporarySettingsStore() -> SettingsStore {
         SettingsStore(customSettingsURL: FileManager.default.temporaryDirectory.appendingPathComponent("GlyphSiftSettings-\(UUID().uuidString).json"))
     }

@@ -55,7 +55,11 @@ final class GlyphSiftViewModel: ObservableObject {
     private var pastedSourceFormat: SourceFormat?
     private var pastedAttributedText: NSAttributedString?
 
-    init(store: SettingsStore = SettingsStore()) {
+    convenience init() {
+        self.init(store: SettingsStore())
+    }
+
+    init(store: SettingsStore) {
         self.store = store
         let loaded = store.load()
         self.settings = loaded

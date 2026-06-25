@@ -4,6 +4,11 @@ struct SettingsStore {
     var fileManager: FileManager = .default
     var customSettingsURL: URL?
 
+    init(fileManager: FileManager = .default, customSettingsURL: URL? = nil) {
+        self.fileManager = fileManager
+        self.customSettingsURL = customSettingsURL
+    }
+
     var settingsURL: URL {
         if let customSettingsURL {
             return customSettingsURL

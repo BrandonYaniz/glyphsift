@@ -196,7 +196,7 @@ private extension OutputRenderer {
     }
 
     func decodeHTMLEntities(_ input: String) -> String {
-        input
+        let named = input
             .replacingOccurrences(of: "&nbsp;", with: " ")
             .replacingOccurrences(of: "&quot;", with: "\"")
             .replacingOccurrences(of: "&#39;", with: "'")
@@ -204,6 +204,40 @@ private extension OutputRenderer {
             .replacingOccurrences(of: "&lt;", with: "<")
             .replacingOccurrences(of: "&gt;", with: ">")
             .replacingOccurrences(of: "&amp;", with: "&")
+        return replacingNumericHTMLEntities(in: named)
+    }
+
+    func replacingNumericHTMLEntities(in input: String) -> String {
+        guard let regex = try? NSRegularExpression(pattern: #"&#(x[0-9A-Fa-f]+|\d+);"#) else {
+            return input
+        }
+
+        let nsInput = input as NSString
+        var output = ""
+        var currentLocation = 0
+
+        for match in regex.matches(in: input, range: NSRange(location: 0, length: nsInput.length)) {
+            output += nsInput.substring(with: NSRange(location: currentLocation, length: match.range.location - currentLocation))
+            let value = nsInput.substring(with: match.range(at: 1))
+            output += character(forNumericEntityValue: value) ?? nsInput.substring(with: match.range)
+            currentLocation = match.range.location + match.range.length
+        }
+
+        output += nsInput.substring(from: currentLocation)
+        return output
+    }
+
+    func character(forNumericEntityValue value: String) -> String? {
+        let scalarValue: UInt32?
+        if value.lowercased().hasPrefix("x") {
+            scalarValue = UInt32(value.dropFirst(), radix: 16)
+        } else {
+            scalarValue = UInt32(value, radix: 10)
+        }
+        guard let scalarValue, let scalar = UnicodeScalar(scalarValue) else {
+            return nil
+        }
+        return String(scalar)
     }
 
     func htmlEscaped(_ input: String) -> String {
