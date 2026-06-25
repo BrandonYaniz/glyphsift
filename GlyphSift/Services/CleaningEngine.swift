@@ -17,6 +17,7 @@ struct CleaningEngine {
         findings.append(contentsOf: analyzePunctuation(input, preset: preset, settings: settings))
         findings.append(contentsOf: analyzeMarkdown(input, preset: preset, settings: settings))
         findings.append(contentsOf: analyzeHTML(input, preset: preset, settings: settings))
+        findings.append(contentsOf: analyzeURLTracking(input, preset: preset, settings: settings))
         findings.append(contentsOf: analyzeRegexRules(input, preset: preset, settings: settings))
 
         var cleaned = input
@@ -25,6 +26,7 @@ struct CleaningEngine {
         cleaned = applyPunctuationNormalization(cleaned, preset: preset, settings: settings)
         cleaned = applyMarkdownCleanup(cleaned, preset: preset, settings: settings)
         cleaned = applyHTMLCleanup(cleaned, preset: preset, settings: settings)
+        cleaned = applyURLTrackingCleanup(cleaned, preset: preset, settings: settings)
         cleaned = applyRegexRules(cleaned, preset: preset, settings: settings)
 
         return CleaningResult(
@@ -321,6 +323,64 @@ private extension CleaningEngine {
         [("&amp;", "&"), ("&lt;", "<"), ("&gt;", ">"), ("&quot;", "\""), ("&#39;", "'"), ("&nbsp;", " ")]
     }
 
+    func analyzeURLTracking(_ input: String, preset: CleaningPreset, settings: AppSettings) -> [CleaningFinding] {
+        guard preset.cleansURLTracking(settings) else { return [] }
+        let nsInput = input as NSString
+        let pattern = #"https?://[^\s<>"']+"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
+
+        return regex.matches(in: input, range: NSRange(location: 0, length: nsInput.length)).compactMap { match in
+            let matched = nsInput.substring(with: match.range)
+            guard let replacement = cleanedURL(matched, settings: settings), replacement != matched else {
+                return nil
+            }
+            return CleaningFinding(range: match.range, category: .urlTracking, label: "Tracking parameter", matchedText: matched, replacementText: replacement)
+        }
+    }
+
+    func applyURLTrackingCleanup(_ input: String, preset: CleaningPreset, settings: AppSettings) -> String {
+        guard preset.cleansURLTracking(settings) else { return input }
+        let pattern = #"https?://[^\s<>"']+"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return input }
+        let nsInput = input as NSString
+        var output = ""
+        var currentLocation = 0
+
+        for match in regex.matches(in: input, range: NSRange(location: 0, length: nsInput.length)) {
+            output += nsInput.substring(with: NSRange(location: currentLocation, length: match.range.location - currentLocation))
+            let matched = nsInput.substring(with: match.range)
+            output += cleanedURL(matched, settings: settings) ?? matched
+            currentLocation = match.range.location + match.range.length
+        }
+
+        output += nsInput.substring(from: currentLocation)
+        return output
+    }
+
+    func cleanedURL(_ rawURL: String, settings: AppSettings) -> String? {
+        let trailingCharacters = CharacterSet(charactersIn: ".,);!?]")
+        var urlText = rawURL
+        var suffix = ""
+        while let lastScalar = urlText.unicodeScalars.last, trailingCharacters.contains(lastScalar) {
+            suffix = String(lastScalar) + suffix
+            urlText.removeLast()
+        }
+
+        guard var components = URLComponents(string: urlText),
+              let queryItems = components.queryItems,
+              !queryItems.isEmpty else {
+            return nil
+        }
+
+        let blockedNames = Set(settings.urlCleaning.trackingParameters.map { $0.lowercased() })
+        let keptItems = queryItems.filter { !blockedNames.contains($0.name.lowercased()) }
+        guard keptItems.count != queryItems.count else { return nil }
+
+        components.queryItems = keptItems.isEmpty ? nil : keptItems
+        guard let cleaned = components.string else { return nil }
+        return cleaned + suffix
+    }
+
     func literalMatches(in input: String, value: String, category: FindingCategory, label: String, replacement: String) -> [CleaningFinding] {
         let nsInput = input as NSString
         var results: [CleaningFinding] = []
@@ -441,5 +501,9 @@ private extension CleaningPreset {
             return false
         }
         return !settings.regexRules.isEmpty
+    }
+
+    func cleansURLTracking(_ settings: AppSettings) -> Bool {
+        self == .aggressiveClean && settings.urlCleaning.removeTrackingParameters
     }
 }

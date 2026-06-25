@@ -109,8 +109,7 @@ struct SettingsView: View {
     private var urlSection: some View {
         Section("URL Cleaning") {
             Toggle("Remove tracking parameters", isOn: binding(\.urlCleaning.removeTrackingParameters))
-                .disabled(true)
-            Text("URL rewriting is disabled in this build to avoid unsafe link changes.")
+            Text("Removes known marketing parameters while keeping the rest of the link intact.")
                 .foregroundStyle(.secondary)
         }
     }

@@ -113,6 +113,23 @@ final class GlyphSiftTests: XCTestCase {
         XCTAssertTrue(result.findings.isEmpty)
     }
 
+    func testAggressiveCleanRemovesTrackingParametersFromURLs() {
+        var settings = AppSettings.default
+        settings.urlCleaning.removeTrackingParameters = true
+
+        let result = engine.analyze("Visit https://example.com/page?utm_source=newsletter&id=42&fbclid=abc.", preset: .aggressiveClean, settings: settings)
+
+        XCTAssertEqual(result.cleaned, "Visit https://example.com/page?id=42.")
+        XCTAssertEqual(result.findings.filter { $0.category == .urlTracking }.count, 1)
+    }
+
+    func testURLTrackingCleanupLeavesLinksAloneWhenDisabled() {
+        let result = engine.analyze("https://example.com/?utm_source=newsletter&id=42", preset: .aggressiveClean, settings: .default)
+
+        XCTAssertEqual(result.cleaned, "https://example.com/?utm_source=newsletter&id=42")
+        XCTAssertTrue(result.findings.filter { $0.category == .urlTracking }.isEmpty)
+    }
+
     func testPresetCountsCanBeComputedFromFindings() {
         let result = engine.analyze("Hello\u{200B} “World”", preset: .aggressiveClean, settings: .default)
 
