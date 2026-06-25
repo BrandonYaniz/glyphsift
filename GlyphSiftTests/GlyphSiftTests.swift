@@ -330,6 +330,13 @@ final class GlyphSiftTests: XCTestCase {
         XCTAssertEqual(output.warnings, ["Conversion is best effort. Raw keeps the most complete source when available."])
     }
 
+    func testRendererConvertsHTMLCodeToMarkdown() throws {
+        let result = engine.analyze("<p>Run <code>glyph --clean</code> now</p>", preset: .plainText, settings: .default)
+        let output = try OutputRenderer().render(result, format: .markdown, sourceFormat: .html, rawText: result.cleaned)
+
+        XCTAssertEqual(output.plainText, "Run `glyph --clean` now")
+    }
+
     func testRendererLeavesInvalidNumericHTMLEntitiesAlone() throws {
         let result = engine.analyze("<p>Invalid &#999999999;</p>", preset: .plainText, settings: .default)
         let output = try OutputRenderer().render(result, format: .markdown, sourceFormat: .html, rawText: result.cleaned)

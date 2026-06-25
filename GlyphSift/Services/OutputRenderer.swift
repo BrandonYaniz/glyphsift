@@ -143,6 +143,7 @@ private extension OutputRenderer {
         output = replacing(output, pattern: #"(?i)<\s*h3\b[^>]*>(.*?)</\s*h3\s*>"#, template: "### $1\n")
         output = replacing(output, pattern: #"(?i)<\s*(strong|b)\b[^>]*>(.*?)</\s*\1\s*>"#, template: "**$2**")
         output = replacing(output, pattern: #"(?i)<\s*(em|i)\b[^>]*>(.*?)</\s*\1\s*>"#, template: "*$2*")
+        output = replacing(output, pattern: #"(?i)<\s*code\b[^>]*>(.*?)</\s*code\s*>"#, template: "`$1`")
         output = replacing(output, pattern: #"(?i)<\s*a\b[^>]*href\s*=\s*["']([^"']+)["'][^>]*>(.*?)</\s*a\s*>"#, template: "[$2]($1)")
         output = replacing(output, pattern: #"(?i)<\s*li\b[^>]*>(.*?)</\s*li\s*>"#, template: "- $1\n")
         output = replacing(output, pattern: #"(?i)<\s*br\s*/?\s*>"#, template: "\n")
