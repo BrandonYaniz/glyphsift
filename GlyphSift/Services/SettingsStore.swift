@@ -2,8 +2,12 @@ import Foundation
 
 struct SettingsStore {
     var fileManager: FileManager = .default
+    var customSettingsURL: URL?
 
     var settingsURL: URL {
+        if let customSettingsURL {
+            return customSettingsURL
+        }
         let support = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? fileManager.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support")
         return support.appendingPathComponent("GlyphSift", isDirectory: true).appendingPathComponent("settings.json")

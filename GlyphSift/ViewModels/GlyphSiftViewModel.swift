@@ -50,12 +50,13 @@ final class GlyphSiftViewModel: ObservableObject {
     private let sourcePreservingCleaner = SourcePreservingCleaner()
     private let attributedTextCleaner = AttributedTextCleaner()
     private let clipboardWriter = ClipboardWriter()
-    private let store = SettingsStore()
+    private let store: SettingsStore
     private var isUpdatingSettings = false
     private var pastedSourceFormat: SourceFormat?
     private var pastedAttributedText: NSAttributedString?
 
-    init() {
+    init(store: SettingsStore = SettingsStore()) {
+        self.store = store
         let loaded = store.load()
         self.settings = loaded
         self.selectedPreset = loaded.selectedPreset

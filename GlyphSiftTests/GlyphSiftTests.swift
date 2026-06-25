@@ -365,6 +365,32 @@ final class GlyphSiftTests: XCTestCase {
         XCTAssertThrowsError(try SettingsStore().import(from: url))
     }
 
+    @MainActor
+    func testViewModelFallsBackToPlainTextOutputForPlainTextInput() {
+        let store = temporarySettingsStore()
+        defer { try? FileManager.default.removeItem(at: store.settingsURL) }
+        let viewModel = GlyphSiftViewModel(store: store)
+
+        viewModel.originalText = "<p>Hello</p>"
+        viewModel.selectedOutputFormat = .html
+        viewModel.originalText = "Hello"
+
+        XCTAssertEqual(viewModel.sourceFormat, .plainText)
+        XCTAssertEqual(viewModel.availableOutputFormats, [.plainText])
+        XCTAssertEqual(viewModel.selectedOutputFormat, .plainText)
+    }
+
+    @MainActor
+    func testViewModelPersistsSettingsToInjectedStore() {
+        let store = temporarySettingsStore()
+        defer { try? FileManager.default.removeItem(at: store.settingsURL) }
+        let viewModel = GlyphSiftViewModel(store: store)
+
+        viewModel.selectedPreset = .aggressiveClean
+
+        XCTAssertEqual(store.load().selectedPreset, .aggressiveClean)
+    }
+
     func testClipboardWriterCopiesHTMLWithPlainTextFallback() {
         let pasteboard = NSPasteboard(name: NSPasteboard.Name("GlyphSiftHTML.\(UUID().uuidString)"))
         let output = RenderedOutput(displayText: "<p>Hello</p>", plainText: "<p>Hello</p>", attributedString: nil, rtfData: nil)
@@ -394,5 +420,9 @@ final class GlyphSiftTests: XCTestCase {
         let output = try OutputRenderer().render(result, format: .html, sourceFormat: .markdown, rawText: result.cleaned)
 
         XCTAssertEqual(output.warnings, ["Conversion is best effort. Raw keeps the most complete source when available."])
+    }
+
+    private func temporarySettingsStore() -> SettingsStore {
+        SettingsStore(customSettingsURL: FileManager.default.temporaryDirectory.appendingPathComponent("GlyphSiftSettings-\(UUID().uuidString).json"))
     }
 }
