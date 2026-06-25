@@ -145,11 +145,44 @@ private extension OutputRenderer {
         output = replacing(output, pattern: #"(?i)<\s*(em|i)\b[^>]*>(.*?)</\s*\1\s*>"#, template: "*$2*")
         output = replacing(output, pattern: #"(?i)<\s*code\b[^>]*>(.*?)</\s*code\s*>"#, template: "`$1`")
         output = replacing(output, pattern: #"(?i)<\s*a\b[^>]*href\s*=\s*["']([^"']+)["'][^>]*>(.*?)</\s*a\s*>"#, template: "[$2]($1)")
+        output = replacingOrderedHTMLLists(in: output)
         output = replacing(output, pattern: #"(?i)<\s*li\b[^>]*>(.*?)</\s*li\s*>"#, template: "- $1\n")
         output = replacing(output, pattern: #"(?i)<\s*br\s*/?\s*>"#, template: "\n")
         output = replacing(output, pattern: #"(?i)</\s*(p|div|section|article|ul|ol)\s*>"#, template: "\n")
         output = replacing(output, pattern: #"(?s)<[^>]+>"#, template: "")
         return decodeHTMLEntities(output).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    func replacingOrderedHTMLLists(in input: String) -> String {
+        guard let regex = try? NSRegularExpression(pattern: #"(?is)<\s*ol\b[^>]*>(.*?)</\s*ol\s*>"#) else {
+            return input
+        }
+
+        let nsInput = input as NSString
+        var output = ""
+        var currentLocation = 0
+
+        for match in regex.matches(in: input, range: NSRange(location: 0, length: nsInput.length)) {
+            output += nsInput.substring(with: NSRange(location: currentLocation, length: match.range.location - currentLocation))
+            output += orderedMarkdownItems(in: nsInput.substring(with: match.range(at: 1)))
+            currentLocation = match.range.location + match.range.length
+        }
+
+        output += nsInput.substring(from: currentLocation)
+        return output
+    }
+
+    func orderedMarkdownItems(in html: String) -> String {
+        guard let regex = try? NSRegularExpression(pattern: #"(?is)<\s*li\b[^>]*>(.*?)</\s*li\s*>"#) else {
+            return html
+        }
+
+        let nsHTML = html as NSString
+        let lines = regex.matches(in: html, range: NSRange(location: 0, length: nsHTML.length)).enumerated().map { index, match in
+            let item = nsHTML.substring(with: match.range(at: 1)).trimmingCharacters(in: .whitespacesAndNewlines)
+            return "\(index + 1). \(item)"
+        }
+        return lines.joined(separator: "\n") + "\n"
     }
 
     func markdownToHTML(_ markdown: String) -> String {

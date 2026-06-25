@@ -354,6 +354,17 @@ final class GlyphSiftTests: XCTestCase {
         XCTAssertEqual(output.plainText, "Run `glyph --clean` now")
     }
 
+    func testRendererConvertsOrderedHTMLListsToMarkdown() throws {
+        let result = engine.analyze("<ol><li>First</li><li><strong>Second</strong></li></ol><ul><li>Third</li></ul>", preset: .plainText, settings: .default)
+        let output = try OutputRenderer().render(result, format: .markdown, sourceFormat: .html, rawText: result.cleaned)
+
+        XCTAssertEqual(output.plainText, """
+1. First
+2. **Second**
+- Third
+""")
+    }
+
     func testRendererLeavesInvalidNumericHTMLEntitiesAlone() throws {
         let result = engine.analyze("<p>Invalid &#999999999;</p>", preset: .plainText, settings: .default)
         let output = try OutputRenderer().render(result, format: .markdown, sourceFormat: .html, rawText: result.cleaned)
