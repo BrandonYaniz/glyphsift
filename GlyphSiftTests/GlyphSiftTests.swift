@@ -140,8 +140,28 @@ final class GlyphSiftTests: XCTestCase {
         XCTAssertEqual(detector.detect("<p>Hello</p>"), .html)
     }
 
+    func testSourceFormatDetectsHTMLDocument() {
+        XCTAssertEqual(detector.detect("<!doctype html><html><body>Hello</body></html>"), .html)
+    }
+
+    func testSourceFormatDetectsHTMLTable() {
+        XCTAssertEqual(detector.detect("<table><tr><td>Total</td></tr></table>"), .html)
+    }
+
     func testSourceFormatDetectsMarkdown() {
         XCTAssertEqual(detector.detect("## Heading\n\n[Link](https://example.com)"), .markdown)
+    }
+
+    func testSourceFormatDetectsMarkdownLists() {
+        XCTAssertEqual(detector.detect("- One\n- Two"), .markdown)
+    }
+
+    func testSourceFormatDetectsMarkdownFences() {
+        XCTAssertEqual(detector.detect("```swift\nlet value = 1\n```"), .markdown)
+    }
+
+    func testSourceFormatKeepsPlainTextWithComparisonSymbols() {
+        XCTAssertEqual(detector.detect("Use 1 < 2 and 3 > 2 in examples."), .plainText)
     }
 
     func testPlainTextOnlyOffersPlainTextOutput() {
