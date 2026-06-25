@@ -347,6 +347,13 @@ final class GlyphSiftTests: XCTestCase {
         XCTAssertEqual(output.warnings, ["Conversion is best effort. Raw keeps the most complete source when available."])
     }
 
+    func testRendererConvertsUnquotedHTMLLinksToMarkdown() throws {
+        let result = engine.analyze("<p>A <a href=https://example.com>link</a></p>", preset: .plainText, settings: .default)
+        let output = try OutputRenderer().render(result, format: .markdown, sourceFormat: .html, rawText: result.cleaned)
+
+        XCTAssertEqual(output.plainText, "A [link](https://example.com)")
+    }
+
     func testRendererConvertsHTMLCodeToMarkdown() throws {
         let result = engine.analyze("<p>Run <code>glyph --clean</code> now</p>", preset: .plainText, settings: .default)
         let output = try OutputRenderer().render(result, format: .markdown, sourceFormat: .html, rawText: result.cleaned)
