@@ -6,17 +6,7 @@ struct ClipboardWriter {
         pasteboard.clearContents()
 
         switch format {
-        case .raw:
-            pasteboard.setString(output.plainText, forType: .string)
-            if sourceFormat == .html {
-                pasteboard.setString(output.plainText, forType: .html)
-            }
-            return "Copied"
-        case .plainText, .markdown:
-            pasteboard.setString(output.plainText, forType: .string)
-            return "Copied"
-        case .html:
-            pasteboard.setString(output.plainText, forType: .html)
+        case .raw, .plainText, .markdown, .html:
             pasteboard.setString(output.plainText, forType: .string)
             return "Copied"
         case .richText:

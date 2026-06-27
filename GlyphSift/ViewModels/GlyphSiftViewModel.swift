@@ -83,7 +83,7 @@ final class GlyphSiftViewModel: ObservableObject {
 
         selectedResult = engine.analyze(originalText, preset: selectedPreset, settings: settings)
         cleanedText = selectedResult.cleaned
-        let rawText = sourcePreservingCleaner.clean(originalText, sourceFormat: sourceFormat, preset: selectedPreset, settings: settings)
+        let rawText = cleanedRawText(for: selectedResult)
         let richText = cleanedRichText(for: selectedResult)
         renderedOutput = (try? renderer.render(selectedResult, format: selectedOutputFormat, sourceFormat: sourceFormat, rawText: rawText, richText: richText)) ?? RenderedOutput(displayText: cleanedText, plainText: cleanedText, attributedString: nil, rtfData: nil)
 
@@ -197,6 +197,15 @@ private extension GlyphSiftViewModel {
             return nil
         }
         return attributedTextCleaner.clean(pastedAttributedText, result: result)
+    }
+
+    func cleanedRawText(for result: CleaningResult) -> String {
+        switch sourceFormat {
+        case .markdown, .html:
+            return sourcePreservingCleaner.clean(originalText, sourceFormat: sourceFormat, preset: selectedPreset, settings: settings)
+        case .plainText, .richText:
+            return result.cleaned
+        }
     }
 
     func richText(from pasteboard: NSPasteboard) -> NSAttributedString? {

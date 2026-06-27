@@ -38,7 +38,7 @@ private extension OutputRenderer {
 
         switch (sourceFormat, format) {
         case (.html, .plainText), (.markdown, .plainText), (.richText, .plainText):
-            return ["Formatting is removed for Plain Text output."]
+            return ["Formatting is removed for Text output."]
         case (.html, .markdown), (.markdown, .html), (.html, .richText), (.markdown, .richText), (.richText, .html), (.richText, .markdown):
             return ["Conversion is best effort. Raw keeps the most complete source when available."]
         default:
@@ -149,12 +149,42 @@ private extension OutputRenderer {
         output = replacing(output, pattern: #"(?i)<\s*code\b[^>]*>(.*?)</\s*code\s*>"#, template: "`$1`")
         output = replacing(output, pattern: #"(?i)<\s*a\b[^>]*href\s*=\s*["']([^"']+)["'][^>]*>(.*?)</\s*a\s*>"#, template: "[$2]($1)")
         output = replacing(output, pattern: #"(?i)<\s*a\b[^>]*href\s*=\s*([^\s>"']+)[^>]*>(.*?)</\s*a\s*>"#, template: "[$2]($1)")
+        output = replacingHTMLBlockquotes(in: output)
         output = replacingOrderedHTMLLists(in: output)
         output = replacing(output, pattern: #"(?i)<\s*li\b[^>]*>(.*?)</\s*li\s*>"#, template: "- $1\n")
         output = replacing(output, pattern: #"(?i)<\s*br\s*/?\s*>"#, template: "\n")
         output = replacing(output, pattern: #"(?i)</\s*(p|div|section|article|ul|ol)\s*>"#, template: "\n")
         output = replacing(output, pattern: #"(?s)<[^>]+>"#, template: "")
         return decodeHTMLEntities(output).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    func replacingHTMLBlockquotes(in input: String) -> String {
+        guard let regex = try? NSRegularExpression(pattern: #"(?is)<\s*blockquote\b[^>]*>(.*?)</\s*blockquote\s*>"#) else {
+            return input
+        }
+
+        let nsInput = input as NSString
+        var output = ""
+        var currentLocation = 0
+
+        for match in regex.matches(in: input, range: NSRange(location: 0, length: nsInput.length)) {
+            output += nsInput.substring(with: NSRange(location: currentLocation, length: match.range.location - currentLocation))
+            output += markdownBlockquote(from: nsInput.substring(with: match.range(at: 1)))
+            currentLocation = match.range.location + match.range.length
+        }
+
+        output += nsInput.substring(from: currentLocation)
+        return output
+    }
+
+    func markdownBlockquote(from html: String) -> String {
+        let plainText = replacing(html, pattern: #"(?i)<\s*br\s*/?\s*>|</\s*(p|div)\s*>"#, template: "\n")
+        let withoutTags = replacing(plainText, pattern: #"(?s)<[^>]+>"#, template: "")
+        let lines = decodeHTMLEntities(withoutTags)
+            .components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        return lines.map { "> \($0)" }.joined(separator: "\n") + "\n"
     }
 
     func replacingOrderedHTMLLists(in input: String) -> String {
@@ -193,6 +223,7 @@ private extension OutputRenderer {
         let lines = markdown.components(separatedBy: .newlines)
         var htmlLines: [String] = []
         var openListTag: String?
+        var isBlockquoteOpen = false
 
         func closeOpenList() {
             if let tag = openListTag {
@@ -201,17 +232,28 @@ private extension OutputRenderer {
             }
         }
 
+        func closeOpenBlockquote() {
+            if isBlockquoteOpen {
+                htmlLines.append("</blockquote>")
+                isBlockquoteOpen = false
+            }
+        }
+
         for line in lines {
             if line.hasPrefix("# ") {
+                closeOpenBlockquote()
                 closeOpenList()
                 htmlLines.append("<h1>\(inlineMarkdownToHTML(String(line.dropFirst(2))))</h1>")
             } else if line.hasPrefix("## ") {
+                closeOpenBlockquote()
                 closeOpenList()
                 htmlLines.append("<h2>\(inlineMarkdownToHTML(String(line.dropFirst(3))))</h2>")
             } else if let heading = markdownHeading(in: line) {
+                closeOpenBlockquote()
                 closeOpenList()
                 htmlLines.append("<h\(heading.level)>\(inlineMarkdownToHTML(heading.text))</h\(heading.level)>")
             } else if let match = line.range(of: #"^\s*[-*+]\s+"#, options: .regularExpression) {
+                closeOpenBlockquote()
                 if openListTag != "ul" {
                     closeOpenList()
                     htmlLines.append("<ul>")
@@ -219,21 +261,32 @@ private extension OutputRenderer {
                 }
                 htmlLines.append("<li>\(inlineMarkdownToHTML(String(line[match.upperBound...])))</li>")
             } else if let match = line.range(of: #"^\s*\d+\.\s+"#, options: .regularExpression) {
+                closeOpenBlockquote()
                 if openListTag != "ol" {
                     closeOpenList()
                     htmlLines.append("<ol>")
                     openListTag = "ol"
                 }
                 htmlLines.append("<li>\(inlineMarkdownToHTML(String(line[match.upperBound...])))</li>")
+            } else if let match = line.range(of: #"^\s{0,3}>\s?"#, options: .regularExpression) {
+                closeOpenList()
+                if !isBlockquoteOpen {
+                    htmlLines.append("<blockquote>")
+                    isBlockquoteOpen = true
+                }
+                htmlLines.append("<p>\(inlineMarkdownToHTML(String(line[match.upperBound...])))</p>")
             } else if line.trimmingCharacters(in: .whitespaces).isEmpty {
+                closeOpenBlockquote()
                 closeOpenList()
                 htmlLines.append("")
             } else {
+                closeOpenBlockquote()
                 closeOpenList()
                 htmlLines.append("<p>\(inlineMarkdownToHTML(line))</p>")
             }
         }
 
+        closeOpenBlockquote()
         closeOpenList()
         return htmlLines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
     }

@@ -14,7 +14,7 @@ enum OutputFormat: String, CaseIterable, Identifiable, Codable {
         case .raw:
             return "Raw"
         case .plainText:
-            return "Plain Text"
+            return "Text"
         case .markdown:
             return "Markdown"
         case .html:
@@ -27,11 +27,11 @@ enum OutputFormat: String, CaseIterable, Identifiable, Codable {
     static func available(for sourceFormat: SourceFormat) -> [OutputFormat] {
         switch sourceFormat {
         case .plainText:
-            return [.plainText]
+            return [.plainText, .raw]
         case .markdown, .html:
-            return [.raw, .plainText, .markdown, .html, .richText]
+            return [.plainText, .raw, .markdown, .html, .richText]
         case .richText:
-            return [.plainText, .markdown, .html, .richText]
+            return [.plainText, .raw, .markdown, .html, .richText]
         }
     }
 }

@@ -194,16 +194,16 @@ final class GlyphSiftTests: XCTestCase {
         XCTAssertEqual(detector.detect("Use 1 < 2 and 3 > 2 in examples."), .plainText)
     }
 
-    func testPlainTextOnlyOffersPlainTextOutput() {
-        XCTAssertEqual(OutputFormat.available(for: .plainText), [.plainText])
+    func testPlainTextOffersTextAndRawOutput() {
+        XCTAssertEqual(OutputFormat.available(for: .plainText), [.plainText, .raw])
     }
 
     func testMarkdownOffersFormattedOutputs() {
-        XCTAssertEqual(OutputFormat.available(for: .markdown), [.raw, .plainText, .markdown, .html, .richText])
+        XCTAssertEqual(OutputFormat.available(for: .markdown), [.plainText, .raw, .markdown, .html, .richText])
     }
 
-    func testRichTextOffersFormattedOutputsWithoutRaw() {
-        XCTAssertEqual(OutputFormat.available(for: .richText), [.plainText, .markdown, .html, .richText])
+    func testRichTextOffersTextRawAndFormattedOutputs() {
+        XCTAssertEqual(OutputFormat.available(for: .richText), [.plainText, .raw, .markdown, .html, .richText])
     }
 
     func testPasteboardFormatDetectsRichText() {
@@ -300,7 +300,7 @@ final class GlyphSiftTests: XCTestCase {
         let output = try OutputRenderer().render(result, format: .plainText, sourceFormat: .html, rawText: result.cleaned)
 
         XCTAssertEqual(output.plainText, "Heading\nA line")
-        XCTAssertEqual(output.warnings, ["Formatting is removed for Plain Text output."])
+        XCTAssertEqual(output.warnings, ["Formatting is removed for Text output."])
     }
 
     func testRendererDecodesNumericHTMLEntitiesToPlainText() throws {
@@ -350,6 +350,18 @@ final class GlyphSiftTests: XCTestCase {
 """)
     }
 
+    func testRendererConvertsMarkdownBlockquotesToHTML() throws {
+        let result = engine.analyze("> One\n> **Two**", preset: .plainText, settings: .default)
+        let output = try OutputRenderer().render(result, format: .html, sourceFormat: .markdown, rawText: result.cleaned)
+
+        XCTAssertEqual(output.plainText, """
+<blockquote>
+<p>One</p>
+<p><strong>Two</strong></p>
+</blockquote>
+""")
+    }
+
     func testRendererConvertsHTMLToMarkdown() throws {
         let result = engine.analyze("<h1>Heading</h1><p>A <strong>bold</strong> <a href=\"https://example.com\">link</a></p>", preset: .plainText, settings: .default)
         let output = try OutputRenderer().render(result, format: .markdown, sourceFormat: .html, rawText: result.cleaned)
@@ -363,6 +375,16 @@ final class GlyphSiftTests: XCTestCase {
         let output = try OutputRenderer().render(result, format: .markdown, sourceFormat: .html, rawText: result.cleaned)
 
         XCTAssertEqual(output.plainText, "#### Detail\n##### Note\n###### Fine print")
+    }
+
+    func testRendererConvertsHTMLBlockquotesToMarkdown() throws {
+        let result = engine.analyze("<blockquote><p>One</p><p><strong>Two</strong></p></blockquote>", preset: .plainText, settings: .default)
+        let output = try OutputRenderer().render(result, format: .markdown, sourceFormat: .html, rawText: result.cleaned)
+
+        XCTAssertEqual(output.plainText, """
+> One
+> **Two**
+""")
     }
 
     func testRendererConvertsUnquotedHTMLLinksToMarkdown() throws {
@@ -499,7 +521,7 @@ final class GlyphSiftTests: XCTestCase {
     }
 
     @MainActor
-    func testViewModelFallsBackToPlainTextOutputForPlainTextInput() {
+    func testViewModelFallsBackToTextOutputForPlainTextInput() {
         let store = temporarySettingsStore()
         defer { try? FileManager.default.removeItem(at: store.settingsURL) }
         let viewModel = GlyphSiftViewModel(store: store)
@@ -509,8 +531,21 @@ final class GlyphSiftTests: XCTestCase {
         viewModel.originalText = "Hello"
 
         XCTAssertEqual(viewModel.sourceFormat, .plainText)
-        XCTAssertEqual(viewModel.availableOutputFormats, [.plainText])
+        XCTAssertEqual(viewModel.availableOutputFormats, [.plainText, .raw])
         XCTAssertEqual(viewModel.selectedOutputFormat, .plainText)
+    }
+
+    @MainActor
+    func testViewModelRawOutputUsesCleanedPlainTextInput() {
+        let store = temporarySettingsStore()
+        defer { try? FileManager.default.removeItem(at: store.settingsURL) }
+        let viewModel = GlyphSiftViewModel(store: store)
+
+        viewModel.selectedOutputFormat = .raw
+        viewModel.originalText = "Hello\u{00A0}World"
+
+        XCTAssertEqual(viewModel.sourceFormat, .plainText)
+        XCTAssertEqual(viewModel.renderedOutput.plainText, "Hello World")
     }
 
     @MainActor
@@ -524,25 +559,25 @@ final class GlyphSiftTests: XCTestCase {
         XCTAssertEqual(store.load().selectedPreset, .aggressiveClean)
     }
 
-    func testClipboardWriterCopiesHTMLWithPlainTextFallback() {
+    func testClipboardWriterCopiesHTMLAsLiteralText() {
         let pasteboard = NSPasteboard(name: NSPasteboard.Name("GlyphSiftHTML.\(UUID().uuidString)"))
         let output = RenderedOutput(displayText: "<p>Hello</p>", plainText: "<p>Hello</p>", attributedString: nil, rtfData: nil)
 
         let message = ClipboardWriter().write(output, format: .html, sourceFormat: .markdown, to: pasteboard)
 
         XCTAssertEqual(message, "Copied")
-        XCTAssertEqual(pasteboard.string(forType: .html), "<p>Hello</p>")
+        XCTAssertNil(pasteboard.string(forType: .html))
         XCTAssertEqual(pasteboard.string(forType: .string), "<p>Hello</p>")
     }
 
-    func testClipboardWriterCopiesRawHTMLAsHTMLAndPlainText() {
+    func testClipboardWriterCopiesRawHTMLAsLiteralText() {
         let pasteboard = NSPasteboard(name: NSPasteboard.Name("GlyphSiftRawHTML.\(UUID().uuidString)"))
         let output = RenderedOutput(displayText: "<article>Hello</article>", plainText: "<article>Hello</article>", attributedString: nil, rtfData: nil)
 
         let message = ClipboardWriter().write(output, format: .raw, sourceFormat: .html, to: pasteboard)
 
         XCTAssertEqual(message, "Copied")
-        XCTAssertEqual(pasteboard.string(forType: .html), "<article>Hello</article>")
+        XCTAssertNil(pasteboard.string(forType: .html))
         XCTAssertEqual(pasteboard.string(forType: .string), "<article>Hello</article>")
     }
 

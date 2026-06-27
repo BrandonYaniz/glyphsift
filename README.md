@@ -11,14 +11,14 @@ The app is intended for text copied from websites, email, documents, content man
 - Shows cleaned output in a separate read-only pane.
 - Reports the number and type of changes found.
 - Detects plain text, Markdown, HTML, and Rich Text input where possible.
-- Copies cleaned output as plain text, Markdown, HTML, or Rich Text when that makes sense for the detected input.
+- Copies cleaned output as literal text, Markdown source, HTML source, or Rich Text when that makes sense for the detected input.
 - Preserves settings and custom regex rules between launches.
 - Imports and exports settings as JSON.
 - Makes selected invisible Unicode characters visible through marker labels.
 
 ## Cleaning Presets
 
-### Plain Text
+### Text Cleanup
 
 Normalizes line endings and unusual spaces, trims trailing whitespace, and reduces excessive blank lines without changing ordinary punctuation.
 
@@ -42,13 +42,13 @@ Combines privacy and publishing cleanup with optional Markdown, HTML, destructiv
 
 GlyphSift auto-detects the input format instead of asking for an input mode. The output picker changes based on what was detected.
 
-**Plain Text** is always available. For plain text input, it is the only output option because there is no formatting to preserve.
+**Text** is always available. It strips formatting and shows only the cleaned plain text.
 
-**Raw** is available for Markdown and HTML input. It keeps the original Markdown or HTML structure, cleans the source text, and preserves tags, Markdown markers, and embedded source as much as possible.
+**Raw** is always available. It shows the cleaned input with no format conversion. For Markdown and HTML input, it preserves tags, Markdown markers, and embedded source as much as possible.
 
-**Markdown** is available for Markdown, HTML, and Rich Text input. Markdown-to-Markdown keeps the cleaned source. HTML and Rich Text conversion are best effort.
+**Markdown** is available for Markdown, HTML, and Rich Text input. It displays and copies literal Markdown source. Markdown-to-Markdown keeps the cleaned source. HTML and Rich Text conversion are best effort.
 
-**HTML** is available for Markdown, HTML, and Rich Text input. HTML-to-HTML keeps the cleaned source. Markdown and Rich Text conversion are best effort.
+**HTML** is available for Markdown, HTML, and Rich Text input. It displays and copies literal HTML source, such as `<h1>Title</h1>`. HTML-to-HTML keeps the cleaned source. Markdown and Rich Text conversion are best effort.
 
 **Rich Text** is available for Markdown, HTML, and Rich Text input. Rich Text pasted from another app keeps formatting where the cleanup can safely preserve the attributed ranges. Rich Text output is copied as RTF with a plain-text fallback.
 
